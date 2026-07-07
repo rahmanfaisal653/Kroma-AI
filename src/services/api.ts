@@ -134,6 +134,11 @@ export const internalKeysApi = {
   revoke: (id: string) => http.delete(`/api/internal-keys/${id}`).then(r => r.data),
 };
 
+export const knowledgeApi = {
+  ingest: (data: { source: string; type?: string; text: string }) => http.post('/api/knowledge/sources', data).then(r => r.data),
+  search: (data: { query: string; topK?: number }) => http.post('/api/knowledge/search', data).then(r => r.data),
+};
+
 export const providerStatusApi = {
   list: () => http.get('/api/provider-status').then(r => r.data),
   create: (data: { id?: string; name: string; baseUrl: string; apiKey?: string }) => http.post('/api/provider-status', data).then(r => r.data),

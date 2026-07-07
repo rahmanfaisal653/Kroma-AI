@@ -14,6 +14,7 @@ const ModelsPage = lazy(() => import('./features/models/ModelsPage'));
 const KeysPage = lazy(() => import('./features/keys/KeysPage'));
 const UsagePage = lazy(() => import('./features/usage/UsagePage'));
 const DocsPage = lazy(() => import('./features/docs/DocsPage'));
+const KnowledgePage = lazy(() => import('./features/knowledge/KnowledgePage'));
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'));
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./features/auth/RegisterPage'));
@@ -63,6 +64,7 @@ function AppRoutes() {
           <Route path="models" element={<ModelsPage />} />
           <Route path="keys" element={<KeysPage />} />
           <Route path="usage" element={<UsagePage />} />
+          <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>

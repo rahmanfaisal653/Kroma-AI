@@ -25,6 +25,7 @@ import devRoutes from './routes/dev.routes.js';
 import internalKeysRoutes from './routes/internal-keys.routes.js';
 import v1Routes from './routes/v1.routes.js';
 import providerStatusRoutes from './routes/provider-status.routes.js';
+import knowledgeRoutes from './routes/knowledge.routes.js';
 import { checkDependencies } from './services/health.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -86,6 +87,7 @@ app.use('/v1', v1Routes);                      // OpenAI-compatible gateway
 // --- Owner-managed gateway ---
 app.use('/api/internal-keys', internalKeysRoutes);
 app.use('/api/provider-status', providerStatusRoutes);
+app.use('/api/knowledge', knowledgeRoutes);
 
 // --- Dev-only Routes (gated by env + token; auto-404 in production) ---
 app.use('/api/dev', devRoutes);

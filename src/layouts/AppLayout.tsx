@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import {
-  Blocks, Key, Activity, FileText, Settings, Sun, Moon, LogOut
+  Blocks, Key, Activity, FileText, Settings, Sun, Moon, LogOut, Database
 } from 'lucide-react';
 import { Sidebar } from '../ui/Sidebar';
 import { ToastContainer } from '../ui/Toast';
@@ -19,6 +19,7 @@ export function AppLayout() {
         { label: 'Providers', path: '/models', icon: <Blocks size={16} /> },
         { label: 'API Keys', path: '/keys', icon: <Key size={16} /> },
         { label: 'Usage', path: '/usage', icon: <Activity size={16} /> },
+        { label: 'Knowledge', path: '/knowledge', icon: <Database size={16} /> },
         { label: 'Docs', path: '/docs', icon: <FileText size={16} /> },
         { label: 'Settings', path: '/settings', icon: <Settings size={16} /> },
       ]

@@ -7,6 +7,9 @@ import { touchGatewayKey } from '../services/internalApiKey.service.js';
 import { logUsage } from '../services/gateway.service.js';
 import { config } from '../config.js';
 import { getProviderConfig, listProviderConfigs } from '../services/providerConfig.service.js';
+import { resolveRagConfig } from '../../src/rag/runtimeConfig.js';
+import { createOllamaEmbedding } from '../../src/rag/ollamaService.js';
+import { queryKnowledgeDocsRaw } from '../../src/rag/chromaService.js';
 
 const router = Router();
 
@@ -67,6 +70,18 @@ async function gatewayModels() {
   return groups.flat();
 }
 
+async function withRag(messages: any[], enabled: boolean) {
+  if (!enabled) return messages;
+  const lastUser = [...messages].reverse().find((m: any) => m?.role === 'user')?.content;
+  if (!lastUser) return messages;
+  const cfg = resolveRagConfig();
+  const embedding = await createOllamaEmbedding(cfg.ollamaBaseUrl, String(lastUser), cfg.embeddingModel);
+  const result = await queryKnowledgeDocsRaw(cfg.chromaBaseUrl, embedding, 4);
+  const docs = (result.documents?.[0] || []).filter(Boolean).slice(0, 4);
+  if (!docs.length) return messages;
+  return [{ role: 'system', content: `Gunakan konteks berikut bila relevan. Jika tidak ada jawaban di konteks, bilang tidak tahu.\n\n${docs.map((d: string, i: number) => `[${i + 1}] ${d}`).join('\n\n')}` }, ...messages];
+}
+
 router.get('/', async (_req, res) => {
   const models = (await gatewayModels()).map(model => ({ id: model.id, provider: model.provider }));
   res.json({
@@ -96,7 +111,7 @@ router.get('/providers', async (_req, res) => {
 router.post('/chat/completions', requireGatewayKey, async (req, res) => {
   const started = Date.now();
   const modelId = String(req.body?.model || '').trim();
-  const messages = req.body?.messages;
+  let messages = req.body?.messages;
   if (!modelId) return apiError(res, 400, 'VALIDATION_ERROR', 'model is required', { example: 'pchitam/llama3:latest' });
   if (!modelId.includes('/')) return apiError(res, 400, 'VALIDATION_ERROR', 'model must use provider prefix: prefix/model-name', { received: modelId, example: 'token-router/provider-model-name' });
   if (!Array.isArray(messages)) return apiError(res, 400, 'VALIDATION_ERROR', 'messages must be an array', { example: [{ role: 'user', content: 'Halo' }] });
@@ -113,6 +128,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
   const provider = configured ? { id: configured.id, baseUrl: configured.baseUrl, apiKey: configured.apiKey } : fallback;
   if (!provider) return apiError(res, 404, 'PROVIDER_NOT_FOUND', 'provider not found', { provider: model.provider, hint: 'Create provider in Providers menu.' });
   if (provider.id === 'openai' && !provider.apiKey) return apiError(res, 503, 'PROVIDER_NOT_CONFIGURED', 'OpenAI API key is not configured', { provider: provider.id, hint: 'Set provider API key in Providers menu.' });
+  messages = await withRag(messages, req.body?.rag === true);
 
   const estimatedInput = estimateTokens(messages);
   try {
@@ -127,7 +143,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
     if (nativeOllama && stream) return apiError(res, 400, 'VALIDATION_ERROR', 'native Ollama streaming needs /v1 base URL', { baseUrl: provider.baseUrl, fix: 'Use Ollama OpenAI-compatible base URL ending with /v1.' });
     const upstream = await axios.post(
       nativeOllama ? `${provider.baseUrl}/api/chat` : `${provider.baseUrl}/chat/completions`,
-      nativeOllama ? { model: model.providerModel, messages, stream: false } : { ...req.body, model: model.providerModel, stream },
+      nativeOllama ? { model: model.providerModel, messages, stream: false } : { ...req.body, messages, model: model.providerModel, stream },
       { timeout: config.defaultTimeoutMs, responseType: stream ? 'stream' : 'json', headers, validateStatus: () => true }
     );
 
