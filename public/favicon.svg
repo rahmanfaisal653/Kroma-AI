@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="kroma-neon-favicon" x1="12" y1="8" x2="54" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C084FC"/>
+      <stop offset="0.45" stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#F472B6"/>
+    </linearGradient>
+    <filter id="kroma-glow-favicon" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#kroma-glow-favicon)" stroke="url(#kroma-neon-favicon)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 8L51 19V43L32 56L13 45V21L32 8Z"/>
+    <path d="M13 21L32 32L51 19"/>
+    <path d="M32 32V56"/>
+    <path d="M23 19V45"/>
+    <path d="M23 32L38 19"/>
+    <path d="M24 33L42 45"/>
+  </g>
+</svg>

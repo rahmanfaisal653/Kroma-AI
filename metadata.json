@@ -1,0 +1,5 @@
+{
+  "name": "Imagen Gateway",
+  "description": "A proxy gateway for local Stable Diffusion server using Kroombase for user quota management.",
+  "requestFramePermissions": []
+}

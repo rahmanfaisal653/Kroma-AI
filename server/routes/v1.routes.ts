@@ -1,0 +1,176 @@
+import { Router } from 'express';
+import axios from 'axios';
+import { listModels, getModel } from '../ai/models.js';
+import { getProvider } from '../ai/providers.js';
+import { requireGatewayKey } from '../middleware/internalApiKey.middleware.js';
+import { touchGatewayKey } from '../services/internalApiKey.service.js';
+import { logUsage } from '../services/gateway.service.js';
+import { config } from '../config.js';
+import { getProviderConfig, listProviderConfigs } from '../services/providerConfig.service.js';
+
+const router = Router();
+
+function apiError(res: any, status: number, code: string, message: string, details?: Record<string, unknown>) {
+  return res.status(status).json({
+    error: {
+      message,
+      code,
+      status,
+      details,
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
+function estimateTokens(value: unknown): number {
+  return Math.ceil(JSON.stringify(value || '').length / 4);
+}
+
+function extractSseContent(raw: string): string {
+  return raw.split(/\r?\n/).map(line => line.trim()).filter(line => line.startsWith('data:')).map(line => {
+    const data = line.slice(5).trim();
+    if (!data || data === '[DONE]') return '';
+    try {
+      const parsed = JSON.parse(data);
+      return parsed?.choices?.[0]?.delta?.content || parsed?.choices?.[0]?.message?.content || '';
+    } catch { return ''; }
+  }).join('');
+}
+
+async function providerModelIds(provider: any) {
+  const fallback = listModels().filter(model => model.provider === provider.id).map(model => model.id);
+  if (provider.id === 'openai' && !provider.apiKey) return fallback;
+  try {
+    const headers: Record<string, string> = {};
+    if (provider.apiKey) {
+      headers.Authorization = ['Bearer', provider.apiKey].join(' ');
+      headers['x-api-key'] = provider.apiKey;
+    }
+    const nativeOllama = !String(provider.baseUrl).endsWith('/v1');
+    let res = await axios.get(`${provider.baseUrl}${nativeOllama ? '/api/tags' : '/models'}`, { timeout: 3000, headers, validateStatus: () => true });
+    if (res.status === 404 && !nativeOllama) res = await axios.get(`${provider.baseUrl.replace(/\/v1$/, '')}/api/tags`, { timeout: 3000, headers, validateStatus: () => true });
+    if (res.status >= 400) return fallback.length ? fallback : [`${provider.id}/default`];
+    const data = nativeOllama || Array.isArray(res.data?.models) ? res.data?.models : Array.isArray(res.data?.data) ? res.data.data : [];
+    const ids = (Array.isArray(data) ? data : []).map((item: any) => String(item?.id || item?.name || '').trim()).filter(Boolean);
+    if (!ids.length) return fallback.length ? fallback : [`${provider.id}/default`];
+    return ids.map((id: string) => id.startsWith(`${provider.id}/`) ? id : `${provider.id}/${id}`);
+  } catch {
+    return fallback.length ? fallback : [`${provider.id}/default`];
+  }
+}
+
+async function gatewayModels() {
+  const providers = await listProviderConfigs();
+  const groups = await Promise.all(providers.map(async provider =>
+    (await providerModelIds(provider)).map(id => ({ id, provider: provider.id as any, providerModel: id.slice(provider.id.length + 1), enabled: true }))
+  ));
+  return groups.flat();
+}
+
+router.get('/', async (_req, res) => {
+  const models = (await gatewayModels()).map(model => ({ id: model.id, provider: model.provider }));
+  res.json({
+    name: 'Kroma AI Gateway',
+    base_url: '/v1',
+    endpoints: ['/v1', '/v1/providers', '/v1/chat/completions'],
+    models,
+  });
+});
+
+router.get('/providers', async (_req, res) => {
+  const providers = await listProviderConfigs();
+  const models = await gatewayModels();
+  res.json({
+    object: 'list',
+    data: providers.map(provider => ({
+      id: provider.id,
+      name: provider.name,
+      object: 'provider',
+      configured: provider.configured,
+      models: models.filter(model => model.provider === provider.id).map(model => model.id),
+    })),
+  });
+});
+
+
+router.post('/chat/completions', requireGatewayKey, async (req, res) => {
+  const started = Date.now();
+  const modelId = String(req.body?.model || '').trim();
+  const messages = req.body?.messages;
+  if (!modelId) return apiError(res, 400, 'VALIDATION_ERROR', 'model is required', { example: 'pchitam/llama3:latest' });
+  if (!modelId.includes('/')) return apiError(res, 400, 'VALIDATION_ERROR', 'model must use provider prefix: prefix/model-name', { received: modelId, example: 'token-router/provider-model-name' });
+  if (!Array.isArray(messages)) return apiError(res, 400, 'VALIDATION_ERROR', 'messages must be an array', { example: [{ role: 'user', content: 'Halo' }] });
+
+  const fixedModel = getModel(modelId);
+  const prefix = modelId.includes('/') ? modelId.split('/')[0] : '';
+  const dynamicProvider = fixedModel ? null : await getProviderConfig(prefix);
+  const model = fixedModel || (dynamicProvider ? { id: modelId, provider: dynamicProvider.id as any, providerModel: modelId.slice(prefix.length + 1) || 'default', enabled: true } : undefined);
+  if (!model) return apiError(res, 404, 'MODEL_NOT_FOUND', 'model/provider not found', { received: modelId, providerPrefix: prefix, hint: 'Check GET /v1/providers and use one of the returned model ids.' });
+  if (!req.gatewayKey) return apiError(res, 401, 'INVALID_API_KEY', 'invalid API key');
+
+  const configured = await getProviderConfig(model.provider);
+  const fallback = fixedModel ? getProvider(model.provider as any) : undefined;
+  const provider = configured ? { id: configured.id, baseUrl: configured.baseUrl, apiKey: configured.apiKey } : fallback;
+  if (!provider) return apiError(res, 404, 'PROVIDER_NOT_FOUND', 'provider not found', { provider: model.provider, hint: 'Create provider in Providers menu.' });
+  if (provider.id === 'openai' && !provider.apiKey) return apiError(res, 503, 'PROVIDER_NOT_CONFIGURED', 'OpenAI API key is not configured', { provider: provider.id, hint: 'Set provider API key in Providers menu.' });
+
+  const estimatedInput = estimateTokens(messages);
+  try {
+    const stream = req.body?.stream === true;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (provider.apiKey) {
+      headers.Authorization = ['Bearer', provider.apiKey].join(' ');
+      headers['x-api-key'] = provider.apiKey;
+    }
+
+    const nativeOllama = provider.id === 'ollama' && !String(provider.baseUrl).endsWith('/v1');
+    if (nativeOllama && stream) return apiError(res, 400, 'VALIDATION_ERROR', 'native Ollama streaming needs /v1 base URL', { baseUrl: provider.baseUrl, fix: 'Use Ollama OpenAI-compatible base URL ending with /v1.' });
+    const upstream = await axios.post(
+      nativeOllama ? `${provider.baseUrl}/api/chat` : `${provider.baseUrl}/chat/completions`,
+      nativeOllama ? { model: model.providerModel, messages, stream: false } : { ...req.body, model: model.providerModel, stream },
+      { timeout: config.defaultTimeoutMs, responseType: stream ? 'stream' : 'json', headers, validateStatus: () => true }
+    );
+
+    if (stream) {
+      if (upstream.status >= 400) return apiError(res, 502, 'PROVIDER_ERROR', 'provider stream failed', { provider: provider.id, upstreamStatus: upstream.status, model: model.providerModel });
+      res.status(200);
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      let output = '';
+      upstream.data.on('data', (chunk: Buffer) => { const raw = chunk.toString('utf8'); output += extractSseContent(raw); res.write(raw); });
+      upstream.data.on('end', async () => {
+        const outputTokens = estimateTokens(output);
+        await Promise.allSettled([touchGatewayKey(req.gatewayKey!.id), logUsage({ userId: 0, apiKeyId: req.gatewayKey!.id, apiId: model.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens: estimatedInput, outputTokens, totalTokens: estimatedInput + outputTokens, latencyMs: Date.now() - started, statusCode: 200, ipAddress: req.ip, userAgent: req.get('user-agent') })]);
+        res.end();
+      });
+      upstream.data.on('error', async (err: any) => {
+        await logUsage({ userId: 0, apiKeyId: req.gatewayKey!.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens: estimatedInput, totalTokens: estimatedInput, latencyMs: Date.now() - started, statusCode: 502, errorMessage: err.message, ipAddress: req.ip, userAgent: req.get('user-agent') });
+        res.end();
+      });
+      return;
+    }
+
+    const responseData = nativeOllama ? {
+      id: `chatcmpl-${Date.now()}`,
+      object: 'chat.completion',
+      created: Math.floor(Date.now() / 1000),
+      model: model.id,
+      choices: [{ index: 0, message: { role: 'assistant', content: upstream.data?.message?.content || '' }, finish_reason: upstream.data?.done ? 'stop' : null }],
+    } : upstream.data;
+    const usage = responseData?.usage || {};
+    const outputTokens = Number(usage.completion_tokens) || estimateTokens(responseData?.choices?.[0]?.message?.content || responseData);
+    const inputTokens = Number(usage.prompt_tokens) || estimatedInput;
+    const totalTokens = Number(usage.total_tokens) || inputTokens + outputTokens;
+    await Promise.allSettled([touchGatewayKey(req.gatewayKey.id), logUsage({ userId: 0, apiKeyId: req.gatewayKey.id, apiId: model.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens, outputTokens, totalTokens, latencyMs: Date.now() - started, statusCode: upstream.status, errorMessage: upstream.status >= 400 ? JSON.stringify(upstream.data).slice(0, 500) : undefined, ipAddress: req.ip, userAgent: req.get('user-agent') })]);
+
+    if (upstream.status >= 400) return apiError(res, 502, 'PROVIDER_ERROR', upstream.data?.error?.message || upstream.data?.message || 'provider request failed', { provider: provider.id, upstreamStatus: upstream.status, upstreamBaseUrl: provider.baseUrl, providerModel: model.providerModel });
+    res.status(upstream.status).json(responseData);
+  } catch (err: any) {
+    await logUsage({ userId: 0, apiKeyId: req.gatewayKey.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens: estimatedInput, totalTokens: estimatedInput, latencyMs: Date.now() - started, statusCode: 502, errorMessage: err.message, ipAddress: req.ip, userAgent: req.get('user-agent') });
+    apiError(res, 502, 'PROVIDER_ERROR', err.message || 'provider request failed', { provider: provider.id, upstreamBaseUrl: provider.baseUrl, providerModel: model.providerModel });
+  }
+});
+
+export default router;
