@@ -3,7 +3,7 @@ import axios from 'axios';
 import { listModels, getModel } from '../ai/models.js';
 import { getProvider } from '../ai/providers.js';
 import { requireGatewayKey } from '../middleware/internalApiKey.middleware.js';
-import { touchGatewayKey } from '../services/internalApiKey.service.js';
+import { findGatewayKey, touchGatewayKey } from '../services/internalApiKey.service.js';
 import { logUsage } from '../services/gateway.service.js';
 import { config } from '../config.js';
 import { getProviderConfig, listProviderConfigs } from '../services/providerConfig.service.js';
@@ -72,6 +72,14 @@ function canUseProvider(provider: any, ownerType?: string) {
   return visibilityIncludes(provider, ownerType === 'partner' ? 'partner' : 'internal');
 }
 
+async function ownerTypeFromRequest(req: any): Promise<'internal' | 'partner'> {
+  const auth = String(req.headers.authorization || '').trim();
+  const headerKey = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : String(req.headers['x-api-key'] || '');
+  const key = headerKey.trim().replace(/^bearer\s+/i, '');
+  const record = key ? await findGatewayKey(key) : null;
+  return record?.owner_type === 'internal' ? 'internal' : 'partner';
+}
+
 async function gatewayModels(ownerType: 'internal' | 'partner') {
   const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, ownerType));
   const groups = await Promise.all(providers.map(async provider =>
@@ -92,8 +100,9 @@ async function withRag(messages: any[], enabled: boolean) {
   return [{ role: 'system', content: `Gunakan konteks berikut bila relevan. Jika tidak ada jawaban di konteks, bilang tidak tahu.\n\n${docs.map((d: string, i: number) => `[${i + 1}] ${d}`).join('\n\n')}` }, ...messages];
 }
 
-router.get('/', async (_req, res) => {
-  const models = (await gatewayModels('partner')).map(model => ({ id: model.id, provider: model.provider }));
+router.get('/', async (req, res) => {
+  const ownerType = await ownerTypeFromRequest(req);
+  const models = (await gatewayModels(ownerType)).map(model => ({ id: model.id, provider: model.provider }));
   res.json({
     name: 'Kroma AI Gateway',
     base_url: '/v1',
@@ -102,9 +111,10 @@ router.get('/', async (_req, res) => {
   });
 });
 
-router.get('/providers', async (_req, res) => {
-  const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, 'partner'));
-  const models = await gatewayModels('partner');
+router.get('/providers', async (req, res) => {
+  const ownerType = await ownerTypeFromRequest(req);
+  const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, ownerType));
+  const models = await gatewayModels(ownerType);
   res.json({
     object: 'list',
     data: providers.map(provider => ({

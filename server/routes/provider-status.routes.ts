@@ -9,6 +9,7 @@ router.use(requireAuth);
 router.get('/', async (_req, res) => {
   const providers = await publicProviderConfigs();
   const data = await Promise.all(providers.map(async provider => {
+    if (provider.enabled === false) return { ...provider, status: 'disabled' };
     if (provider.id === 'openai' && !provider.configured) return { ...provider, status: 'not_configured' };
     try {
       const full = await getProviderConfig(provider.id);

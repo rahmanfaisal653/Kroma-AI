@@ -8,8 +8,9 @@ declare module 'express-serve-static-core' {
 }
 
 export async function requireGatewayKey(req: Request, res: Response, next: NextFunction) {
-  const auth = String(req.headers.authorization || '');
-  const key = auth.startsWith('Bearer ') ? auth.slice(7).trim() : String(req.headers['x-api-key'] || '').trim();
+  const auth = String(req.headers.authorization || '').trim();
+  const raw = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : String(req.headers['x-api-key'] || '');
+  const key = String(raw).trim().replace(/^bearer\s+/i, '');
   if (!key) return res.status(401).json({ error: { message: 'Missing API key', code: 'INVALID_API_KEY' } });
   const record = await findGatewayKey(key);
   if (!record) return res.status(401).json({ error: { message: 'Invalid API key', code: 'INVALID_API_KEY' } });
