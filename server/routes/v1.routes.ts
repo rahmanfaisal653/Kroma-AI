@@ -40,9 +40,10 @@ function extractSseContent(raw: string): string {
   }).join('');
 }
 
-async function providerModelIds(provider: any) {
-  const fallback = listModels().filter(model => model.provider === provider.id).map(model => model.id);
-  if (provider.id === 'openai' && !provider.apiKey) return fallback;
+async function fetchProviderModels(provider: any) {
+  if (provider.id === 'openai' && !provider.apiKey) {
+    return { status: 'not_configured', models: [] as string[], error: 'OpenAI API key is not configured' };
+  }
   try {
     const headers: Record<string, string> = {};
     if (provider.apiKey) {
@@ -50,15 +51,15 @@ async function providerModelIds(provider: any) {
       headers['x-api-key'] = provider.apiKey;
     }
     const nativeOllama = !String(provider.baseUrl).endsWith('/v1');
-    let res = await axios.get(`${provider.baseUrl}${nativeOllama ? '/api/tags' : '/models'}`, { timeout: 3000, headers, validateStatus: () => true });
+    const url = `${provider.baseUrl}${nativeOllama ? '/api/tags' : '/models'}`;
+    let res = await axios.get(url, { timeout: 3000, headers, validateStatus: () => true });
     if (res.status === 404 && !nativeOllama) res = await axios.get(`${provider.baseUrl.replace(/\/v1$/, '')}/api/tags`, { timeout: 3000, headers, validateStatus: () => true });
-    if (res.status >= 400) return fallback.length ? fallback : [`${provider.id}/default`];
+    if (res.status >= 400) return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} models request failed: HTTP ${res.status}` };
     const data = nativeOllama || Array.isArray(res.data?.models) ? res.data?.models : Array.isArray(res.data?.data) ? res.data.data : [];
     const ids = (Array.isArray(data) ? data : []).map((item: any) => String(item?.id || item?.name || '').trim()).filter(Boolean);
-    if (!ids.length) return fallback.length ? fallback : [`${provider.id}/default`];
-    return ids.map((id: string) => id.startsWith(`${provider.id}/`) ? id : `${provider.id}/${id}`);
-  } catch {
-    return fallback.length ? fallback : [`${provider.id}/default`];
+    return { status: 'ok', models: ids.map((id: string) => id.startsWith(`${provider.id}/`) ? id : `${provider.id}/${id}`) };
+  } catch (err: any) {
+    return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} is unreachable: ${err.code || err.message || 'request failed'}` };
   }
 }
 
@@ -69,22 +70,30 @@ function visibilityIncludes(provider: any, audience: 'internal' | 'partner') {
 
 function canUseProvider(provider: any, ownerType?: string) {
   if (provider.enabled === false) return false;
-  return visibilityIncludes(provider, ownerType === 'partner' ? 'partner' : 'internal');
+  return visibilityIncludes(provider, ownerType === 'internal' ? 'internal' : 'partner');
 }
 
 async function ownerTypeFromRequest(req: any): Promise<'internal' | 'partner'> {
+  const xKey = String(req.headers['x-api-key'] || '').trim();
   const auth = String(req.headers.authorization || '').trim();
-  const headerKey = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : String(req.headers['x-api-key'] || '');
-  const key = headerKey.trim().replace(/^bearer\s+/i, '');
-  const record = key ? await findGatewayKey(key) : null;
-  return record?.owner_type === 'internal' ? 'internal' : 'partner';
+  const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+
+  // ponytail: try both headers; ignore dashboard JWT/non-kg bearer tokens.
+  for (const key of [xKey, bearer]) {
+    const clean = key.replace(/^bearer\s+/i, '').trim();
+    if (!clean.startsWith('kg_')) continue;
+    const record = await findGatewayKey(clean);
+    if (record) return record.owner_type === 'internal' ? 'internal' : 'partner';
+  }
+  return 'partner';
 }
 
 async function gatewayModels(ownerType: 'internal' | 'partner') {
   const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, ownerType));
-  const groups = await Promise.all(providers.map(async provider =>
-    (await providerModelIds(provider)).map(id => ({ id, provider: provider.id as any, providerModel: id.slice(provider.id.length + 1), enabled: true }))
-  ));
+  const groups = await Promise.all(providers.map(async provider => {
+    const result = await fetchProviderModels(provider);
+    return result.models.map(id => ({ id, provider: provider.id as any, providerModel: id.slice(provider.id.length + 1), enabled: true }));
+  }));
   return groups.flat();
 }
 
@@ -114,17 +123,19 @@ router.get('/', async (req, res) => {
 router.get('/providers', async (req, res) => {
   const ownerType = await ownerTypeFromRequest(req);
   const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, ownerType));
-  const models = await gatewayModels(ownerType);
-  res.json({
-    object: 'list',
-    data: providers.map(provider => ({
+  const data = await Promise.all(providers.map(async provider => {
+    const result = await fetchProviderModels(provider);
+    return {
       id: provider.id,
       name: provider.name,
       object: 'provider',
       configured: provider.configured,
-      models: models.filter(model => model.provider === provider.id).map(model => model.id),
-    })),
-  });
+      status: result.status,
+      error: result.error,
+      models: result.models,
+    };
+  }));
+  res.json({ object: 'list', data });
 });
 
 

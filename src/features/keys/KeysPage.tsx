@@ -23,7 +23,8 @@ export default function KeysPage() {
     setLoading(true);
     try {
       const data = await internalKeysApi.create({ name: form.name.trim(), owner_type: type, owner_name: (form.owner_name || form.name).trim(), note: form.note.trim(), allowed_models: form.allowed_models.split(',').map(s => s.trim()).filter(Boolean) });
-      setCreatedKey(data.key); setForm(emptyForm); await load(); toast.success('API key dibuat');
+      setCreatedKey(data.key);
+      setForm(emptyForm); await load(); toast.success('API key dibuat');
     } finally { setLoading(false); }
   };
 
@@ -37,7 +38,7 @@ export default function KeysPage() {
       <div className="flex gap-2">{(['internal', 'partner'] as OwnerType[]).map(t => <button key={t} onClick={() => setType(t)} className={`px-3 py-2 rounded text-sm border ${type === t ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text)]'}`}>{t === 'internal' ? 'Internal Key' : 'Partner Integration Key'}</button>)}</div>
       <div className="grid md:grid-cols-3 gap-2"><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="nama key" className="px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-sm" /><input value={form.owner_name} onChange={e => setForm({ ...form, owner_name: e.target.value })} placeholder="owner/partner name" className="px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-sm" /><input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="catatan optional" className="px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-sm" /><input value={form.allowed_models} onChange={e => setForm({ ...form, allowed_models: e.target.value })} placeholder="allowed models: * atau openai/gpt-4o-mini" className="md:col-span-3 px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-sm" /></div>
       <Button onClick={createKey} loading={loading} icon={<Plus size={14} />}>Generate</Button>
-      {createdKey && <div className="p-3 rounded bg-[var(--color-code-bg)] border border-[var(--color-border)]"><p className="text-xs text-amber-500 mb-2">Copy sekarang. Full key hanya tampil sekali.</p><div className="flex gap-2 items-center"><code className="flex-1 text-xs break-all">{createdKey}</code><Button size="sm" variant="outline" icon={<Copy size={14} />} onClick={() => { navigator.clipboard.writeText(createdKey); localStorage.setItem('kroma_gateway_key', createdKey); toast.success('Copied + siap dipakai di Docs'); }}>Copy</Button></div></div>}
+      {createdKey && <div className="p-3 rounded bg-[var(--color-code-bg)] border border-[var(--color-border)]"><p className="text-xs text-amber-500 mb-2">Copy sekarang. Full key hanya tampil sekali.</p><div className="flex gap-2 items-center"><code className="flex-1 text-xs break-all">{createdKey}</code><Button size="sm" variant="outline" icon={<Copy size={14} />} onClick={() => { navigator.clipboard.writeText(createdKey); toast.success('Copied'); }}>Copy</Button></div></div>}
     </div>
     <KeyList title="Internal Keys" keys={internalKeys} onRemove={remove} />
     <KeyList title="Partner Integration Keys" keys={partnerKeys} onRemove={remove} />
@@ -48,8 +49,7 @@ function KeyList({ title, keys, onRemove }: { title: string; keys: GatewayKey[];
   const copyKey = (key?: string) => {
     if (!key) return toast.error('Full key tidak tersedia untuk key lama. Generate key baru kalau perlu copy ulang.');
     navigator.clipboard.writeText(key);
-    localStorage.setItem('kroma_gateway_key', key);
-    toast.success('Copied + siap dipakai di Docs');
+    toast.success('Copied');
   };
   return <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
     <div className="px-5 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface-alt)] flex items-center gap-2"><Key size={15} /><span className="text-sm font-semibold">{title}</span></div>

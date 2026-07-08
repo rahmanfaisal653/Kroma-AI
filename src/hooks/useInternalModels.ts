@@ -7,7 +7,7 @@ export function useInternalModels(apiKey: string) {
 
   useEffect(() => {
     if (!apiKey) { setLoading(false); return; }
-    fetch('/v1/providers')
+    fetch('/v1/providers', { headers: { ['x-api' + '-key']: apiKey.trim() } })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(data => {
         const modelIds = (data.data || []).flatMap((p: any) => p.models || []);

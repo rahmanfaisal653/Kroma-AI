@@ -10,7 +10,8 @@ const keyHeader = 'x-api' + '-key';
 const keyPlaceholder = 'KROMA_' + 'KG_API_KEY';
 
 export default function DocsPage() {
-  const [gatewayKey, setGatewayKey] = useState(localStorage.getItem('kroma_gateway_key') || '');
+  const [gatewayKey, setGatewayKey] = useState('');
+  // ponytail: Docs tester intentionally never auto-loads/saves API keys; partner must paste kg_ manually.
   const [body, setBody] = useState(defaultBody);
   const [test, setTest] = useState<TestState>({ label: 'Belum ada test', status: 'idle' });
   const baseUrl = window.location.origin;
@@ -71,7 +72,7 @@ function compactResponse(label: string, raw: string) {
     const data = JSON.parse(raw);
     if (data.error) return JSON.stringify({ error: data.error.message, code: data.error.code, details: data.error.details }, null, 2);
     if (label === 'Health') return JSON.stringify({ status: data.status, uptime: data.uptime }, null, 2);
-    if (label === 'Providers') return JSON.stringify({ providers: (data.data || []).map((p: any) => ({ id: p.id, name: p.name, models: p.models })) }, null, 2);
+    if (label === 'Providers') return JSON.stringify({ providers: (data.data || []).map((p: any) => ({ id: p.id, name: p.name, status: p.status, error: p.error, models: p.models })) }, null, 2);
     if (label === 'Chat') return JSON.stringify({ content: data.choices?.[0]?.message?.content || '', model: data.model }, null, 2);
     return JSON.stringify(data, null, 2);
   } catch { return raw; }
@@ -80,11 +81,11 @@ function compactResponse(label: string, raw: string) {
 function DocsContent({ gatewayKey, setGatewayKey, body, setBody, test, run, partnerFetch, examples }: { gatewayKey: string; setGatewayKey: (v: string) => void; body: string; setBody: (v: string) => void; test: TestState; run: any; partnerFetch: any; examples: Record<string, string> }) {
   const [selected, setSelected] = useState<PartnerTest>('providers');
   const runSelected = () => {
-    if (!['health', 'providers'].includes(selected) && !gatewayKey.trim()) {
-      return run('Validasi Kroma API key', async () => ({ status: 400, text: async () => JSON.stringify({ error: { message: 'Kroma API key kg_ wajib diisi. Ini bukan API key provider/OpenAI/Ollama.', code: 'VALIDATION_ERROR' } }, null, 2) }));
+    if (selected !== 'health' && !gatewayKey.trim()) {
+      return run('Validasi Kroma API key', async () => ({ status: 400, text: async () => JSON.stringify({ error: { message: 'Kroma API key kg_ wajib diisi untuk test Providers/Chat. Ini bukan API key provider/OpenAI/Ollama.', code: 'VALIDATION_ERROR' } }, null, 2) }));
     }
     if (selected === 'health') return run('Health', () => fetch('/api/health'));
-    if (selected === 'providers') return run('Providers', () => fetch('/v1/providers'));
+    if (selected === 'providers') return run('Providers', () => partnerFetch('/v1/providers'));
     return run('Chat', async () => {
       let payload: any;
       try {
@@ -95,7 +96,7 @@ function DocsContent({ gatewayKey, setGatewayKey, body, setBody, test, run, part
 
       // ponytail: docs tester only; for real apps, choose the model explicitly from /v1/providers.
       if (!payload.model || payload.model === 'openai/gpt-4o-mini') {
-        const providers = await fetch('/v1/providers').then(r => r.json()).catch(() => null);
+        const providers = await partnerFetch('/v1/providers').then((r: Response) => r.json()).catch(() => null);
         const firstModel = providers?.data?.flatMap((p: any) => p.models || [])?.[0];
         if (firstModel) payload.model = firstModel;
       }
@@ -122,7 +123,7 @@ function DocsContent({ gatewayKey, setGatewayKey, body, setBody, test, run, part
         <option value="providers">Providers — sync provider + model untuk KroomBridge</option>
         <option value="chat">Chat — test request ke provider</option>
       </select>
-      <input value={gatewayKey} onChange={e => { setGatewayKey(e.target.value); localStorage.setItem('kroma_gateway_key', e.target.value.trim()); }} placeholder="Kroma API key: kg_xxx" className="w-full mt-3 px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-mono" />
+      <input value={gatewayKey} onChange={e => setGatewayKey(e.target.value)} placeholder="Paste Kroma API key manual: kg_xxx" className="w-full mt-3 px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-mono" />
       {selected === 'chat' && <textarea value={body} onChange={e => setBody(e.target.value)} rows={10} className="w-full mt-3 px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-code-bg)] text-sm font-mono" />}
       <Button className="w-full mt-3" onClick={runSelected}>Run Selected Test</Button>
       {test.body && <Code code={test.body} className="mt-4 max-h-80" />}
