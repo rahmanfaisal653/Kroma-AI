@@ -85,7 +85,27 @@ function DocsContent({ gatewayKey, setGatewayKey, body, setBody, test, run, part
     }
     if (selected === 'health') return run('Health', () => fetch('/api/health'));
     if (selected === 'providers') return run('Providers', () => fetch('/v1/providers'));
-    return run('Chat', () => partnerFetch('/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }));
+    return run('Chat', async () => {
+      let payload: any;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        return { status: 400, text: async () => JSON.stringify({ error: { message: 'Body JSON tidak valid.', code: 'VALIDATION_ERROR' } }) };
+      }
+
+      // ponytail: docs tester only; for real apps, choose the model explicitly from /v1/providers.
+      if (!payload.model || payload.model === 'openai/gpt-4o-mini') {
+        const providers = await fetch('/v1/providers').then(r => r.json()).catch(() => null);
+        const firstModel = providers?.data?.flatMap((p: any) => p.models || [])?.[0];
+        if (firstModel) payload.model = firstModel;
+      }
+
+      return partnerFetch('/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    });
   };
 
   return <div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,.95fr)] gap-6 items-start">

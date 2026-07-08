@@ -62,8 +62,18 @@ async function providerModelIds(provider: any) {
   }
 }
 
-async function gatewayModels() {
-  const providers = await listProviderConfigs();
+function visibilityIncludes(provider: any, audience: 'internal' | 'partner') {
+  const visibility = Array.isArray(provider.visibility) ? provider.visibility : provider.visibility === 'both' ? ['internal', 'partner'] : [provider.visibility || 'internal'];
+  return visibility.includes(audience);
+}
+
+function canUseProvider(provider: any, ownerType?: string) {
+  if (provider.enabled === false) return false;
+  return visibilityIncludes(provider, ownerType === 'partner' ? 'partner' : 'internal');
+}
+
+async function gatewayModels(ownerType: 'internal' | 'partner') {
+  const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, ownerType));
   const groups = await Promise.all(providers.map(async provider =>
     (await providerModelIds(provider)).map(id => ({ id, provider: provider.id as any, providerModel: id.slice(provider.id.length + 1), enabled: true }))
   ));
@@ -83,7 +93,7 @@ async function withRag(messages: any[], enabled: boolean) {
 }
 
 router.get('/', async (_req, res) => {
-  const models = (await gatewayModels()).map(model => ({ id: model.id, provider: model.provider }));
+  const models = (await gatewayModels('partner')).map(model => ({ id: model.id, provider: model.provider }));
   res.json({
     name: 'Kroma AI Gateway',
     base_url: '/v1',
@@ -93,8 +103,8 @@ router.get('/', async (_req, res) => {
 });
 
 router.get('/providers', async (_req, res) => {
-  const providers = await listProviderConfigs();
-  const models = await gatewayModels();
+  const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, 'partner'));
+  const models = await gatewayModels('partner');
   res.json({
     object: 'list',
     data: providers.map(provider => ({
@@ -127,6 +137,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
   const fallback = fixedModel ? getProvider(model.provider as any) : undefined;
   const provider = configured ? { id: configured.id, baseUrl: configured.baseUrl, apiKey: configured.apiKey } : fallback;
   if (!provider) return apiError(res, 404, 'PROVIDER_NOT_FOUND', 'provider not found', { provider: model.provider, hint: 'Create provider in Providers menu.' });
+  if (configured && !canUseProvider(configured, req.gatewayKey.owner_type)) return apiError(res, 403, 'PROVIDER_NOT_ALLOWED', 'provider is not available for this API key', { provider: configured.id, visibility: configured.visibility, keyType: req.gatewayKey.owner_type });
   if (provider.id === 'openai' && !provider.apiKey) return apiError(res, 503, 'PROVIDER_NOT_CONFIGURED', 'OpenAI API key is not configured', { provider: provider.id, hint: 'Set provider API key in Providers menu.' });
   messages = await withRag(messages, req.body?.rag === true);
 

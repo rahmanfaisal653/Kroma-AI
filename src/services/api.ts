@@ -139,10 +139,11 @@ export const knowledgeApi = {
   search: (data: { query: string; topK?: number }) => http.post('/api/knowledge/search', data).then(r => r.data),
 };
 
+type ProviderVisibility = 'internal' | 'partner';
 export const providerStatusApi = {
   list: () => http.get('/api/provider-status').then(r => r.data),
-  create: (data: { id?: string; name: string; baseUrl: string; apiKey?: string }) => http.post('/api/provider-status', data).then(r => r.data),
-  update: (id: string, data: { name?: string; baseUrl: string; apiKey?: string }) => http.put(`/api/provider-status/${id}`, data).then(r => r.data),
+  create: (data: { id?: string; name: string; baseUrl: string; apiKey?: string; enabled?: boolean; visibility?: ProviderVisibility[] }) => http.post('/api/provider-status', data).then(r => r.data),
+  update: (id: string, data: { name?: string; baseUrl: string; apiKey?: string; enabled?: boolean; visibility?: ProviderVisibility[] }) => http.put(`/api/provider-status/${id}`, data).then(r => r.data),
   reset: (id: string) => http.delete(`/api/provider-status/${id}`).then(r => r.data),
 };
 

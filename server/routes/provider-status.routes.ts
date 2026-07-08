@@ -30,13 +30,26 @@ router.get('/', async (_req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const created = await createProviderConfig({ id: req.body?.id, name: req.body?.name, baseUrl: req.body?.baseUrl, token: req.body?.apiKey });
+  const created = await createProviderConfig({
+    id: req.body?.id,
+    name: req.body?.name,
+    baseUrl: req.body?.baseUrl,
+    token: req.body?.apiKey,
+    enabled: req.body?.enabled,
+    visibility: req.body?.visibility,
+  });
   if (!created) return res.status(400).json({ error: 'invalid or duplicate provider' });
   res.status(201).json({ ...(await publicProviderConfigs()).find(p => p.id === created.id) });
 });
 
 router.put('/:id', async (req, res) => {
-  const updated = await updateProviderConfig(req.params.id, { name: req.body?.name, baseUrl: req.body?.baseUrl, token: req.body?.apiKey });
+  const updated = await updateProviderConfig(req.params.id, {
+    name: req.body?.name,
+    baseUrl: req.body?.baseUrl,
+    token: req.body?.apiKey,
+    enabled: req.body?.enabled,
+    visibility: req.body?.visibility,
+  });
   if (!updated) return res.status(404).json({ error: 'provider not found' });
   res.json({ ...(await publicProviderConfigs()).find(p => p.id === updated.id) });
 });
