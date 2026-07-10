@@ -10,7 +10,7 @@ function getInitialTheme(): Theme {
   // Legacy key compat
   const legacy = localStorage.getItem('theme');
   if (legacy === 'light' || legacy === 'dark') return legacy;
-  return 'dark';
+  return 'light';
 }
 
 function applyTheme(theme: Theme) {
@@ -29,7 +29,7 @@ interface ThemeState {
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => {
-  const initial = typeof window !== 'undefined' ? getInitialTheme() : 'dark';
+  const initial = typeof window !== 'undefined' ? getInitialTheme() : 'light';
   if (typeof window !== 'undefined') applyTheme(initial);
 
   return {

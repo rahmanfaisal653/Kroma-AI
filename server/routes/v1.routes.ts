@@ -57,7 +57,7 @@ async function fetchProviderModels(provider: any) {
     if (res.status >= 400) return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} models request failed: HTTP ${res.status}` };
     const data = nativeOllama || Array.isArray(res.data?.models) ? res.data?.models : Array.isArray(res.data?.data) ? res.data.data : [];
     const ids = (Array.isArray(data) ? data : []).map((item: any) => String(item?.id || item?.name || '').trim()).filter(Boolean);
-    return { status: 'ok', models: ids.map((id: string) => id.startsWith(`${provider.id}/`) ? id : `${provider.id}/${id}`) };
+    return { status: 'on', models: ids.map((id: string) => id.startsWith(`${provider.id}/`) ? id : `${provider.id}/${id}`) };
   } catch (err: any) {
     return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} is unreachable: ${err.code || err.message || 'request failed'}` };
   }

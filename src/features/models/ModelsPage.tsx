@@ -73,13 +73,24 @@ export default function ModelsPage() {
   });
 
   const quickUpdate = async (p: ProviderStatus, patch: Partial<Form>) => {
-    await providerStatusApi.update(p.id, {
-      name: p.name || p.id,
-      baseUrl: p.baseUrl,
+    const next = {
+      ...p,
       enabled: patch.enabled ?? p.enabled !== false,
       visibility: patch.visibility ?? cleanVisibility(p.visibility),
-    });
-    await load();
+    };
+    setProviders(items => items.map(item => item.id === p.id ? next : item));
+    try {
+      await providerStatusApi.update(p.id, {
+        name: p.name || p.id,
+        baseUrl: p.baseUrl,
+        enabled: next.enabled,
+        visibility: next.visibility,
+      });
+      toast.success('Provider updated');
+    } catch {
+      toast.error('Gagal update provider');
+      await load();
+    }
   };
 
   return <div className="h-full overflow-y-auto"><div className="max-w-5xl mx-auto p-6 space-y-6 animate-fade-in">
@@ -105,7 +116,7 @@ export default function ModelsPage() {
 
     <div className="grid md:grid-cols-3 gap-4">
       {providers.map(p => <div key={p.id} className="kroma-card-hover rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 space-y-3 backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-2"><h2 className="font-semibold text-[var(--color-text)]">{p.name || p.id}</h2><span className={`text-xs px-2 py-1 rounded-full ${p.enabled === false ? 'bg-zinc-500/10 text-zinc-400' : p.status === 'ok' ? 'bg-emerald-500/10 text-emerald-400' : p.status === 'not_configured' ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>{p.enabled === false ? 'disabled' : p.status || 'unknown'}</span></div>
+        <div className="flex items-center justify-between gap-2"><h2 className="font-semibold text-[var(--color-text)]">{p.name || p.id}</h2><span className={`text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded border ${p.enabled === false ? 'border-slate-500/40 bg-slate-500/10 text-slate-400' : p.status === 'on' ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400' : p.status === 'not_configured' ? 'border-amber-500/40 bg-amber-500/15 text-amber-400' : 'border-red-500/40 bg-red-500/15 text-red-400'}`}>{p.enabled === false ? 'disabled' : p.status || 'unknown'}</span></div>
         <p className="text-xs font-mono text-[var(--color-text-muted)] break-all">{p.baseUrl}</p>
         <p className="text-xs text-[var(--color-text-muted)]">model: <code>{p.id}/model-name</code></p>
         <p className="text-xs text-[var(--color-text-muted)]">{p.custom ? 'custom' : p.overridden ? 'custom config' : 'env default'} · key: {p.configured ? 'set' : 'empty'} · visibility: {cleanVisibility(p.visibility).map(v => visibilityLabels[v]).join(', ')}</p>

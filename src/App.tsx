@@ -17,8 +17,8 @@ const DocsPage = lazy(() => import('./features/docs/DocsPage'));
 const KnowledgePage = lazy(() => import('./features/knowledge/KnowledgePage'));
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'));
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
-const RegisterPage = lazy(() => import('./features/auth/RegisterPage'));
 const LandingPage = lazy(() => import('./features/landing/LandingPage'));
+const GatewayLandingPage = lazy(() => import('./features/landing/GatewayLandingPage'));
 const HomePage = lazy(() => import('./features/home/HomePage'));
 
 function LoadingFallback() {
@@ -39,12 +39,12 @@ function ProtectedRoute({
   area?: 'user' | 'admin';
 }) {
   const { isAuthenticated } = useAuthStore();
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAuthenticated) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 function AppRoutes() {
-  const { isAuthenticated, hasHydrated, justRegistered } = useAuthStore();
+  const { isAuthenticated, hasHydrated } = useAuthStore();
 
   if (!hasHydrated) return <LoadingFallback />;
 
@@ -56,11 +56,12 @@ function AppRoutes() {
         
         {/* Auth (public) */}
         <Route path="/login" element={isAuthenticated ? <Navigate to="/home" replace /> : <LoginPage />} />
-        <Route path="/register" element={isAuthenticated && !justRegistered ? <Navigate to="/home" replace /> : <RegisterPage />} />
+        <Route path="/register" element={<Navigate to="/login" replace />} />
 
         {/* User routes — sidebar layout */}
         <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="home" element={<HomePage />} />
+          <Route path="gateway" element={<GatewayLandingPage />} />
           <Route path="models" element={<ModelsPage />} />
           <Route path="keys" element={<KeysPage />} />
           <Route path="usage" element={<UsagePage />} />

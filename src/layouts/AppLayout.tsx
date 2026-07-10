@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import {
-  Blocks, Key, Activity, FileText, Settings, Sun, Moon, LogOut, Database
+  Blocks, Key, Activity, FileText, Settings, Sun, Moon, LogOut, Database, Home
 } from 'lucide-react';
 import { Sidebar } from '../ui/Sidebar';
 import { ToastContainer } from '../ui/Toast';
@@ -16,6 +16,8 @@ export function AppLayout() {
     {
       title: 'Navigation',
       items: [
+        { label: 'Welcome', path: '/home', icon: <Home size={16} /> },
+        { label: 'Gateway Page', path: '/gateway', icon: <Blocks size={16} /> },
         { label: 'Providers', path: '/models', icon: <Blocks size={16} /> },
         { label: 'API Keys', path: '/keys', icon: <Key size={16} /> },
         { label: 'Usage', path: '/usage', icon: <Activity size={16} /> },
@@ -28,15 +30,12 @@ export function AppLayout() {
 
   return (
     <div className="kroma-user relative flex h-screen bg-[var(--color-bg)] overflow-hidden">
-      <div className="kroma-orb -top-24 right-8" />
-      <div className="kroma-orb bottom-[-120px] left-1/3 opacity-15" style={{ animationDelay: '-3s' }} />
       <Sidebar
         sections={sections}
         header={
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-[var(--radius-md)] flex items-center justify-center shrink-0"
-              style={{ background: 'var(--color-primary-gradient)' }}>
-              <span className="text-white text-xs font-bold">K</span>
+            <div className="w-7 h-7 flex items-center justify-center shrink-0 p-0.5">
+              <img src="/brand/kroma-k.png" alt="Kroma" className="kroma-logo-mark h-full w-full object-contain" />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-[var(--color-text)] leading-none">Kroma AI</p>
@@ -57,9 +56,8 @@ export function AppLayout() {
             </button>
             {user && (
               <div className="flex items-center gap-2 px-2.5 py-2 rounded-[var(--radius-md)] hover:bg-[var(--color-surface-alt)] transition-colors group">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: 'var(--color-primary-gradient)' }}>
-                  <span className="text-[10px] font-bold text-white">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 border border-[var(--color-border)] bg-[var(--color-surface-alt)]">
+                  <span className="text-[10px] font-bold text-[var(--color-text)]">
                     {user.email.charAt(0).toUpperCase()}
                   </span>
                 </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Trash2 } from 'lucide-react';
 import { userApi } from '../../services/api';
 import { Button } from '../../ui/Button';
 
@@ -41,6 +41,17 @@ export default function UsagePage() {
 
   useEffect(() => { load(); }, []);
 
+  const clearAll = async () => {
+    if (!confirm('Hapus semua usage log?')) return;
+    await userApi.clearUsageHistory();
+    await load();
+  };
+
+  const cleanupOld = async () => {
+    await userApi.cleanupUsageHistory();
+    await load();
+  };
+
   const totalTokens = logs.reduce((sum, log) => sum + (Number(log.total_tokens) || 0), 0);
   const today = new Date().toISOString().slice(0, 10);
   const month = today.slice(0, 7);
@@ -70,7 +81,11 @@ export default function UsagePage() {
             <h1 className="text-xl font-bold text-[var(--color-text)]">Usage</h1>
             <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Pantau pemakaian token internal dan partner.</p>
           </div>
-          <Button variant="outline" size="sm" icon={<Download size={14} />} onClick={exportCsv}>Export CSV</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={cleanupOld}>Cleanup 7d+</Button>
+            <Button variant="outline" size="sm" icon={<Download size={14} />} onClick={exportCsv}>Export CSV</Button>
+            <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={clearAll}>Clear all</Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">

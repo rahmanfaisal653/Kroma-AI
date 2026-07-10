@@ -13,11 +13,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: [
-    'relative overflow-hidden text-white font-semibold',
-    'bg-[linear-gradient(135deg,#22d3ee_0%,#8b5cf6_55%,#f472b6_100%)]',
-    'shadow-[0_0_0_1px_rgba(255,255,255,0.10),0_10px_28px_rgba(34,211,238,0.20)]',
-    'hover:shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_16px_36px_rgba(139,92,246,0.28)] hover:-translate-y-0.5',
-    'transition-all duration-200',
+    'relative overflow-hidden font-semibold',
+    'bg-[var(--color-primary)] text-[var(--color-bg)]',
+    'border border-[var(--color-primary)]',
+    'hover:bg-[var(--color-primary-hover)] hover:border-[var(--color-primary-hover)]',
+    'transition-colors duration-150',
   ].join(' '),
   secondary: [
     'bg-[var(--color-surface-alt)] text-[var(--color-text)]',
@@ -65,7 +65,7 @@ export function Button({
         'inline-flex items-center justify-center font-medium',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)]',
         'disabled:opacity-40 disabled:pointer-events-none',
-        'select-none',
+        'select-none active:translate-y-px',
         variantClasses[variant],
         sizeClasses[size],
         className

@@ -22,7 +22,7 @@ router.get('/', async (_req, res) => {
       let response = await axios.get(`${provider.baseUrl}${native ? '/api/tags' : '/models'}`, { timeout: 3000, headers, validateStatus: () => true });
       if (response.status === 404 && !native) response = await axios.get(`${provider.baseUrl.replace(/\/v1$/, '')}/api/tags`, { timeout: 3000, headers, validateStatus: () => true });
       if (response.status >= 400) throw new Error(`GET models failed: HTTP ${response.status}`);
-      return { ...provider, status: 'ok' };
+      return { ...provider, status: 'on' };
     } catch (err: any) {
       return { ...provider, status: 'error', error: err.message };
     }

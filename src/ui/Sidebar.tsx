@@ -46,7 +46,7 @@ export function Sidebar({ sections, header, footer }: SidebarProps) {
 
       <aside className={cn(
         'flex flex-col h-full',
-        'bg-[var(--color-sidebar-bg)]/90 border-r border-[var(--color-border)] backdrop-blur-xl shadow-[18px_0_60px_rgba(0,0,0,0.20)]',
+        'bg-[var(--color-sidebar-bg)] border-r border-[var(--color-border)]',
         'transition-all duration-200 shrink-0',
         collapsed ? 'w-[60px]' : 'w-[220px]',
         'fixed md:relative z-50 md:z-auto',

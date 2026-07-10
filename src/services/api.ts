@@ -41,6 +41,15 @@ export const userApi = {
 
   getUsageHistory: (params: { limit?: number; api_key_id?: string; owner_type?: string; owner_name?: string; provider?: string; model?: string; from?: string; to?: string } = {}) =>
     http.get<{ logs: any[]; total: number }>('/api/user/usage-history', { params: { limit: 200, ...params } }).then(r => r.data),
+
+  clearUsageHistory: () =>
+    http.delete<{ success: boolean }>('/api/user/usage-history').then(r => r.data),
+
+  cleanupUsageHistory: () =>
+    http.post<{ success: boolean; deleted: number }>('/api/user/usage-history/cleanup').then(r => r.data),
+
+  getDashboard: () =>
+    http.get<any>('/api/user/dashboard').then(r => r.data),
 };
 
 // --- Models (Public) ---
