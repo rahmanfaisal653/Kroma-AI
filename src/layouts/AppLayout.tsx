@@ -17,7 +17,7 @@ export function AppLayout() {
       title: 'Navigation',
       items: [
         { label: 'Introduction', path: '/gateway', icon: <PanelTop size={16} /> },
-        { label: 'Welcome', path: '/home', icon: <Home size={16} /> },
+        { label: 'Dashboard', path: '/home', icon: <Home size={16} /> },
         { label: 'Providers', path: '/models', icon: <Blocks size={16} /> },
         { label: 'API Keys', path: '/keys', icon: <Key size={16} /> },
         { label: 'Usage', path: '/usage', icon: <Activity size={16} /> },
