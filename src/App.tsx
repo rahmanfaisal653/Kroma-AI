@@ -51,7 +51,7 @@ function AppRoutes() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Routes>
-        {/* Public landing page */}
+        {/* Public Introduction */}
         <Route path="/" element={isAuthenticated ? <Navigate to="/home" replace /> : <LandingPage />} />
         
         {/* Auth (public) */}
