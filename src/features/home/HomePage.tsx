@@ -1,21 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, ArrowRight, Database, FileText, Key, Layers, Server, TerminalSquare } from 'lucide-react';
+import { Activity, ArrowRight, Database, FileText, Key, Layers, RefreshCw, Server, TerminalSquare } from 'lucide-react';
 import { userApi } from '../../services/api';
 import { useAuthStore } from '../../stores/auth.store';
+
+const REFRESH_SECONDS = 40;
 
 export default function HomePage() {
   const user = useAuthStore(s => s.user);
   const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState('');
 
+  const load = async () => {
+    setLoading(true);
+    try {
+      const next = await userApi.getDashboard();
+      setData(next);
+      setLastUpdated(new Date().toLocaleTimeString());
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
   useEffect(() => {
-    userApi.getDashboard().then(setData).catch(() => setData(null));
+    const timer = window.setInterval(load, REFRESH_SECONDS * 1000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const usage = data?.usage || { requests: 0, tokens: 0, today: 0, errors: 0 };
   const keys = data?.keys || { total: 0, internal: 0, partner: 0 };
   const providers = data?.providers || { total: 0, enabled: 0 };
-  const recent = data?.recent || [];
+  const recent = (data?.recent || []).slice(0, 10);
 
   return <div className="h-full overflow-y-auto">
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -25,8 +44,10 @@ export default function HomePage() {
           <div>
             <h1 className="text-2xl font-semibold text-[var(--color-text)]">Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}.</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-muted)]">Pantau provider, API key, usage, dan Knowledge/RAG dari satu dashboard owner.</p>
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">Dashboard auto-refresh tiap {REFRESH_SECONDS}s · last updated {lastUpdated || '-'}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button onClick={load} className="inline-flex items-center gap-2 rounded border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-surface-alt)]" disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh</button>
             <Link to="/models" className="inline-flex items-center gap-2 rounded border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-surface-alt)]"><Server size={14} /> Providers</Link>
             <Link to="/keys" className="inline-flex items-center gap-2 rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-[var(--color-bg)]"><Key size={14} /> Generate key</Link>
           </div>
@@ -43,8 +64,11 @@ export default function HomePage() {
       <section className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
           <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-3">
-            <div><h2 className="text-sm font-semibold text-[var(--color-text)]">Recent API usage</h2><p className="text-xs text-[var(--color-text-muted)]">Auto-cleanup: logs older than 7 days</p></div>
-            <Link to="/usage" className="text-xs font-medium text-[var(--color-text)] hover:underline">Open usage <ArrowRight size={12} className="inline" /></Link>
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--color-text)]">Recent API usage</h2>
+              <p className="text-xs text-[var(--color-text-muted)]">10 request terbaru. Detail penuh ada di menu API Usage.</p>
+            </div>
+            <Link to="/usage" className="text-xs font-medium text-[var(--color-text)] hover:underline">Open API Usage <ArrowRight size={12} className="inline" /></Link>
           </div>
           <div className="divide-y divide-[var(--color-border)]">
             {recent.map((log: any) => <div key={log.id} className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-3 text-xs">
@@ -57,6 +81,7 @@ export default function HomePage() {
         </div>
 
         <div className="space-y-3">
+          <Quick to="/usage" icon={<Activity size={16} />} title="Full API Usage" desc="Pagination, filters, export CSV, cleanup logs." />
           <Quick to="/docs" icon={<TerminalSquare size={16} />} title="Test chat endpoint" desc="Run cURL-style provider test." />
           <Quick to="/knowledge" icon={<Database size={16} />} title="Knowledge / RAG" desc="Add text sources and test retrieval." />
           <Quick to="/docs" icon={<FileText size={16} />} title="API documentation" desc="/v1, /v1/providers, chat completions." />

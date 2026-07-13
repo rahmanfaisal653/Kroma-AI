@@ -101,11 +101,18 @@ router.get('/quota', requireAuth, async (req, res) => {
 // GET /api/user/usage-history — Owner usage logs for internal/partner keys
 router.get('/usage-history', requireAuth, async (req, res) => {
   try {
-    await db.query('DELETE FROM usage_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)');
-    const limit = Math.min(Number(req.query.limit) || 200, 1000);
-    const [logs, keys] = await Promise.all([db.query('SELECT * FROM usage_logs ORDER BY created_at DESC LIMIT ?', [limit]), listGatewayKeys()]);
+    await cleanupOldUsageLogs();
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const pageSize = Math.min(Math.max(Number(req.query.page_size) || Number(req.query.limit) || 25, 1), 100);
+    const offset = (page - 1) * pageSize;
+
+    // ponytail: keep this lightweight; logs auto-expire at 7d, cap protects dashboard from huge scans.
+    const [logs, keys] = await Promise.all([
+      db.query('SELECT * FROM usage_logs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) ORDER BY created_at DESC LIMIT 5000'),
+      listGatewayKeys(),
+    ]);
     const keyById = new Map(keys.map((key: any) => [String(key.id), key]));
-    const enriched = (Array.isArray(logs) ? logs : []).map((log: any) => {
+    const filtered = (Array.isArray(logs) ? logs : []).map((log: any) => {
       const key = keyById.get(String(log.api_key_id || '')) as any;
       return {
         ...log,
@@ -126,13 +133,36 @@ router.get('/usage-history', requireAuth, async (req, res) => {
         (!req.query.model || String(log.model_slug || '').includes(String(req.query.model))) &&
         (!req.query.from || created >= from) &&
         (!req.query.to || created <= to);
-    }).sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()).slice(0, limit);
+    }).sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
-    res.json({ logs: enriched, total: enriched.length });
+    const today = new Date().toISOString().slice(0, 10);
+    const month = today.slice(0, 7);
+    const summary = filtered.reduce((acc: any, log: any) => {
+      const tokens = Number(log.total_tokens) || 0;
+      acc.requests += 1;
+      acc.tokens += tokens;
+      acc.errors += Number(log.status_code) >= 400 ? 1 : 0;
+      if (String(log.created_at || '').startsWith(today)) acc.today_tokens += tokens;
+      if (String(log.created_at || '').startsWith(month)) acc.month_tokens += tokens;
+      return acc;
+    }, { requests: 0, tokens: 0, today_tokens: 0, month_tokens: 0, errors: 0 });
+
+    res.json({
+      logs: filtered.slice(offset, offset + pageSize),
+      total: filtered.length,
+      page,
+      pageSize,
+      summary,
+      retentionDays: 7,
+    });
   } catch {
-    res.json({ logs: [], total: 0 }); // ponytail: usage logging may be absent on fresh DB
+    res.json({ logs: [], total: 0, page: 1, pageSize: 25, summary: { requests: 0, tokens: 0, today_tokens: 0, month_tokens: 0, errors: 0 }, retentionDays: 7 }); // ponytail: usage logging may be absent on fresh DB
   }
 });
+
+async function cleanupOldUsageLogs() {
+  await db.query('DELETE FROM usage_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)');
+}
 
 router.delete('/usage-history', requireAuth, async (_req, res) => {
   try {
@@ -154,10 +184,10 @@ router.post('/usage-history/cleanup', requireAuth, async (_req, res) => {
 
 router.get('/dashboard', requireAuth, async (_req, res) => {
   try {
-    await db.query('DELETE FROM usage_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)');
+    await cleanupOldUsageLogs();
     const [keys, providers, logs] = await Promise.all([listGatewayKeys(), listProviderConfigs(), db.query('SELECT * FROM usage_logs ORDER BY created_at DESC LIMIT 500')]);
     const rows = Array.isArray(logs) ? logs : [];
-    const recent = rows.sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()).slice(0, 8);
+    const recent = rows.sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()).slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
     const usage = rows.reduce((acc: any, log: any) => {
       acc.requests += 1;

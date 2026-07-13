@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { ChevronDown, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useChat } from '../../hooks/useChat';
-import { useModels } from '../../hooks/useModels';
 import { useInternalModels } from '../../hooks/useInternalModels';
 import { useAuthStore } from '../../stores/auth.store';
 import { useConversationsStore } from '../../stores/conversations.store';
@@ -12,11 +11,7 @@ import { ChatBubble } from './components/ChatBubble';
 import { ChatInput } from './components/ChatInput';
 import { ChatEmptyState } from './components/ChatEmptyState';
 import { useAutoScroll } from './hooks/useAutoScroll';
-import { useScraper } from './hooks/useScraper';
-import { ScrapedContentBlock } from './components/ScrapedContentBlock';
 import { exportConversation, type ExportFormat } from './utils/exportChat';
-import { extractUrls } from './utils/urlDetector';
-import { feedbackApi } from '../../services/api';
 import { useChatPreferencesStore } from '../../stores/chatPreferences.store';
 import type { ChatSettings } from './components/ChatSettingsPanel';
 import type { ChatMessage } from '../../types/api';
@@ -27,11 +22,9 @@ import type { ChatMessage } from '../../types/api';
 
 export default function ChatPage() {
   const { modelId } = useParams();
-  const { models, loading: legacyModelsLoading } = useModels();
   const user = useAuthStore(s => s.user);
   const [gatewayKey, setGatewayKey] = useState(() => localStorage.getItem('kroma_gateway_key') || '');
-  const { models: internalModels, loading: internalModelsLoading } = useInternalModels(gatewayKey);
-  const modelsLoading = internalModelsLoading || legacyModelsLoading;
+  const { models: internalModels, loading: modelsLoading } = useInternalModels(gatewayKey);
 
   // --- Local UI state ---
   const [selectedModel, setSelectedModel] = useState<string>('');
@@ -41,7 +34,6 @@ export default function ChatPage() {
   const [showHistory, setShowHistory] = useState(() => window.innerWidth >= 768);
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [attachedImageName, setAttachedImageName] = useState('');
-  const [isScraping, setIsScraping] = useState(false);
   const chatPrefs = useChatPreferencesStore();
   const [settings, setSettings] = useState<ChatSettings>({
     temperature: chatPrefs.defaultTemperature,
@@ -66,7 +58,7 @@ export default function ChatPage() {
   activeIdRef.current = activeId;
 
   // --- Derived ---
-  const textModels = (internalModels.length ? internalModels : models).filter(m => m.type === 'text-to-text');
+  const textModels = internalModels.filter(m => m.type === 'text-to-text');
   const activeModel = textModels.find(m => String(m.id) === (modelId || selectedModel)) || textModels[0];
 
   // --- Chat hook ---
@@ -96,9 +88,6 @@ export default function ChatPage() {
 
   // Keep message ref in sync
   messagesRef.current = messages;
-
-  // --- Scraper ---
-  const { status: scrapeStatus, results: scrapeResults, scrapeFromMessage, clearScrapeResults } = useScraper();
 
   // --- Auto-scroll (use messages.length, not the array ref, to prevent loops) ---
   const { containerRef, endRef, showScrollButton, scrollToBottom } = useAutoScroll([
@@ -187,25 +176,6 @@ export default function ChatPage() {
         ...(attachedImage ? { image_url: attachedImage } : {}),
       };
 
-      // Auto-scrape URLs found in the message (with timeout protection)
-      const urls = extractUrls(input);
-      if (urls.length > 0) {
-        // Clear ALL previous scrape results and cache before scraping new URLs
-        clearScrapeResults();
-        setIsScraping(true);
-        try {
-          const scrapedContext = await scrapeFromMessage(input);
-          if (scrapedContext) {
-            overrides.scrapedContext = scrapedContext;
-          }
-        } catch (err) {
-          console.error('[ChatPage] Scrape failed:', err);
-          // Scrape failed/timed out — send without context
-        } finally {
-          setIsScraping(false);
-        }
-      }
-
       sendMessage(input, overrides);
     } catch (err) {
       console.error('[ChatPage] Send failed:', err);
@@ -214,7 +184,7 @@ export default function ChatPage() {
     setInput('');
     setAttachedImage(null);
     setAttachedImageName('');
-  }, [input, isLoading, settings, attachedImage, sendMessage, createConversation, modelId, scrapeFromMessage, clearScrapeResults, chatPrefs]);
+  }, [input, isLoading, settings, attachedImage, sendMessage, createConversation, modelId, chatPrefs]);
 
   const handleNewChat = useCallback(() => {
     // Save current messages first
@@ -294,14 +264,8 @@ export default function ChatPage() {
     exportConversation(messagesRef.current, convo?.title || 'Chat Export', format);
   }, [getActive]);
 
-  const handleFeedback = useCallback((rating: 'up' | 'down', messageIndex: number) => {
-    const id = activeIdRef.current;
-    if (!id) return;
-    feedbackApi.submit({
-      conversation_id: id,
-      message_index: messageIndex,
-      rating,
-    }).catch(() => {});
+  const handleFeedback = useCallback((_rating: 'up' | 'down', _messageIndex: number) => {
+    // Feedback endpoint removed with legacy API cleanup.
   }, []);
 
   const handleClearChat = useCallback(() => {
@@ -379,12 +343,6 @@ export default function ChatPage() {
                     onEdit={handleEdit}
                     onFeedback={handleFeedback}
                   />
-                  {/* Show scraped content block after last user message */}
-                  {msg.role === 'user' && idx === messages.length - 1 && scrapeResults.length > 0 && (
-                    <div className="ml-10">
-                      <ScrapedContentBlock status={scrapeStatus} results={scrapeResults} />
-                    </div>
-                  )}
                 </React.Fragment>
               ))}
               <div ref={endRef} />
@@ -422,13 +380,9 @@ export default function ChatPage() {
           onInputChange={setInput}
           onSend={handleSend}
           onStop={abortCurrentRequest}
-          isLoading={isLoading || isScraping}
+          isLoading={isLoading}
           disabled={!activeModel}
-          placeholder={
-            isScraping ? 'Scraping URL content...' :
-            activeModel ? `Message ${activeModel.name}...` :
-            'Select a model first...'
-          }
+          placeholder={activeModel ? `Message ${activeModel.name}...` : 'Select a model first...'}
           attachedImage={attachedImage}
           attachedImageName={attachedImageName}
           onAttachImage={(dataUrl, name) => { setAttachedImage(dataUrl); setAttachedImageName(name); }}
