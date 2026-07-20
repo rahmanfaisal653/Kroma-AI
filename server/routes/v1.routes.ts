@@ -115,8 +115,22 @@ router.get('/', async (req, res) => {
   res.json({
     name: 'Kroma AI Gateway',
     base_url: '/v1',
-    endpoints: ['/v1', '/v1/providers', '/v1/chat/completions'],
+    endpoints: ['/v1', '/v1/models', '/v1/providers', '/v1/chat/completions'],
     models,
+  });
+});
+
+router.get('/models', requireGatewayKey, async (req, res) => {
+  const ownerType = req.gatewayKey?.owner_type === 'internal' ? 'internal' : 'partner';
+  const models = await gatewayModels(ownerType);
+  res.json({
+    object: 'list',
+    data: models.map(model => ({
+      id: model.id,
+      object: 'model',
+      created: 0,
+      owned_by: model.provider,
+    })),
   });
 });
 
@@ -180,7 +194,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
     );
 
     if (stream) {
-      if (upstream.status >= 400) return apiError(res, 502, 'PROVIDER_ERROR', 'provider stream failed', { provider: provider.id, upstreamStatus: upstream.status, model: model.providerModel });
+      if (upstream.status >= 400) return apiError(res, upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502, 'PROVIDER_ERROR', 'provider stream failed', { provider: provider.id, upstreamStatus: upstream.status, model: model.providerModel });
       res.status(200);
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
@@ -213,7 +227,12 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
     const totalTokens = Number(usage.total_tokens) || inputTokens + outputTokens;
     await Promise.allSettled([touchGatewayKey(req.gatewayKey.id), logUsage({ userId: 0, apiKeyId: req.gatewayKey.id, apiId: model.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens, outputTokens, totalTokens, latencyMs: Date.now() - started, statusCode: upstream.status, errorMessage: upstream.status >= 400 ? JSON.stringify(upstream.data).slice(0, 500) : undefined, ipAddress: req.ip, userAgent: req.get('user-agent') })]);
 
-    if (upstream.status >= 400) return apiError(res, 502, 'PROVIDER_ERROR', upstream.data?.error?.message || upstream.data?.message || 'provider request failed', { provider: provider.id, upstreamStatus: upstream.status, upstreamBaseUrl: provider.baseUrl, providerModel: model.providerModel });
+    if (upstream.status >= 400) {
+      const providerMessage = upstream.data?.error?.message || upstream.data?.message || 'provider request failed';
+      const providerCode = upstream.data?.error?.code || upstream.data?.code || 'PROVIDER_ERROR';
+      const status = upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502;
+      return apiError(res, status, 'PROVIDER_ERROR', providerMessage, { provider: provider.id, providerCode, upstreamStatus: upstream.status, upstreamBaseUrl: provider.baseUrl, providerModel: model.providerModel });
+    }
     res.status(upstream.status).json(responseData);
   } catch (err: any) {
     await logUsage({ userId: 0, apiKeyId: req.gatewayKey.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens: estimatedInput, totalTokens: estimatedInput, latencyMs: Date.now() - started, statusCode: 502, errorMessage: err.message, ipAddress: req.ip, userAgent: req.get('user-agent') });

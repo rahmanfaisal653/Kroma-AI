@@ -9,7 +9,13 @@ type Audience = 'internal' | 'partner';
 type Input = { id?: string; name?: string; baseUrl?: string; token?: string; enabled?: boolean; visibility?: Audience[] | string };
 type StoredProvider = ProviderConfig & { overridden?: boolean; custom?: boolean; configured: boolean; enabled: boolean; visibility: Audience[] };
 
-function cleanUrl(value = '') { return value.trim().replace(/\/+$/, ''); }
+function cleanUrl(value = '') {
+  return value
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/chat\/completions$/i, '')
+    .replace(/\/models$/i, '');
+}
 function cleanId(value = '') { return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, ''); }
 function parse(row: any) { try { return JSON.parse(row?.content || '{}'); } catch { return {}; } }
 function slug(id: string) { return `provider-${id}`; }
