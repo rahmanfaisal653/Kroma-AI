@@ -40,27 +40,52 @@ function extractSseContent(raw: string): string {
   }).join('');
 }
 
+function providerHeaders(provider: any, json = false) {
+  const headers: Record<string, string> = json ? { 'Content-Type': 'application/json' } : {};
+  if (provider.apiKey) {
+    headers.Authorization = ['Bearer', provider.apiKey].join(' ');
+    headers['x-api-key'] = provider.apiKey;
+  }
+  return headers;
+}
+
+function providerModelUrls(baseUrl: string) {
+  const base = String(baseUrl).replace(/\/+$/, '');
+  const root = base.replace(/\/v1$/i, '');
+  return [...new Set(base.endsWith('/v1') ? [`${base}/models`, `${root}/api/tags`] : [`${base}/models`, `${base}/v1/models`, `${base}/api/tags`])];
+}
+
+function providerChatTargets(baseUrl: string) {
+  const base = String(baseUrl).replace(/\/+$/, '');
+  const root = base.replace(/\/v1$/i, '');
+  return [...new Set(base.endsWith('/v1')
+    ? [{ url: `${base}/chat/completions`, native: false }, { url: `${root}/api/chat`, native: true }]
+    : [{ url: `${base}/chat/completions`, native: false }, { url: `${base}/v1/chat/completions`, native: false }, { url: `${base}/api/chat`, native: true }]
+  )];
+}
+
 async function fetchProviderModels(provider: any) {
   if (provider.id === 'openai' && !provider.apiKey) {
     return { status: 'not_configured', models: [] as string[], error: 'OpenAI API key is not configured' };
   }
-  try {
-    const headers: Record<string, string> = {};
-    if (provider.apiKey) {
-      headers.Authorization = ['Bearer', provider.apiKey].join(' ');
-      headers['x-api-key'] = provider.apiKey;
+  const headers = providerHeaders(provider);
+  const tried: string[] = [];
+  let lastError = '';
+  for (const url of providerModelUrls(provider.baseUrl)) {
+    tried.push(url);
+    try {
+      const res = await axios.get(url, { timeout: 5000, headers, validateStatus: () => true });
+      if (res.status === 404) { lastError = `HTTP 404 at ${url}`; continue; }
+      if (res.status >= 400) return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} models request failed: HTTP ${res.status}` };
+      const native = url.endsWith('/api/tags');
+      const data = native || Array.isArray(res.data?.models) ? res.data?.models : Array.isArray(res.data?.data) ? res.data.data : [];
+      const ids = (Array.isArray(data) ? data : []).map((item: any) => String(item?.id || item?.name || '').trim()).filter(Boolean);
+      return { status: 'on', models: ids.map((id: string) => id.startsWith(`${provider.id}/`) ? id : `${provider.id}/${id}`) };
+    } catch (err: any) {
+      lastError = err.code || err.message || 'request failed';
     }
-    const nativeOllama = !String(provider.baseUrl).endsWith('/v1');
-    const url = `${provider.baseUrl}${nativeOllama ? '/api/tags' : '/models'}`;
-    let res = await axios.get(url, { timeout: 3000, headers, validateStatus: () => true });
-    if (res.status === 404 && !nativeOllama) res = await axios.get(`${provider.baseUrl.replace(/\/v1$/, '')}/api/tags`, { timeout: 3000, headers, validateStatus: () => true });
-    if (res.status >= 400) return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} models request failed: HTTP ${res.status}` };
-    const data = nativeOllama || Array.isArray(res.data?.models) ? res.data?.models : Array.isArray(res.data?.data) ? res.data.data : [];
-    const ids = (Array.isArray(data) ? data : []).map((item: any) => String(item?.id || item?.name || '').trim()).filter(Boolean);
-    return { status: 'on', models: ids.map((id: string) => id.startsWith(`${provider.id}/`) ? id : `${provider.id}/${id}`) };
-  } catch (err: any) {
-    return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} is unreachable: ${err.code || err.message || 'request failed'}` };
   }
+  return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} models unavailable: ${lastError || 'no compatible endpoint'}; tried ${tried.join(', ')}` };
 }
 
 function visibilityIncludes(provider: any, audience: 'internal' | 'partner') {
@@ -185,13 +210,20 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
       headers['x-api-key'] = provider.apiKey;
     }
 
-    const nativeOllama = provider.id === 'ollama' && !String(provider.baseUrl).endsWith('/v1');
-    if (nativeOllama && stream) return apiError(res, 400, 'VALIDATION_ERROR', 'native Ollama streaming needs /v1 base URL', { baseUrl: provider.baseUrl, fix: 'Use Ollama OpenAI-compatible base URL ending with /v1.' });
-    const upstream = await axios.post(
-      nativeOllama ? `${provider.baseUrl}/api/chat` : `${provider.baseUrl}/chat/completions`,
-      nativeOllama ? { model: model.providerModel, messages, stream: false } : { ...req.body, messages, model: model.providerModel, stream },
-      { timeout: config.defaultTimeoutMs, responseType: stream ? 'stream' : 'json', headers, validateStatus: () => true }
-    );
+    let nativeOllama = false;
+    let upstream: any = null;
+    let triedChat: string[] = [];
+    for (const target of providerChatTargets(provider.baseUrl)) {
+      if (stream && target.native) continue;
+      triedChat.push(target.url);
+      const body = target.native
+        ? { model: model.providerModel, messages, stream: false }
+        : { ...req.body, messages, model: model.providerModel, stream };
+      const candidate = await axios.post(target.url, body, { timeout: config.defaultTimeoutMs, responseType: stream ? 'stream' : 'json', headers, validateStatus: () => true });
+      upstream = candidate;
+      nativeOllama = target.native;
+      if (candidate.status !== 404) break;
+    }
 
     if (stream) {
       if (upstream.status >= 400) return apiError(res, upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502, 'PROVIDER_ERROR', 'provider stream failed', { provider: provider.id, upstreamStatus: upstream.status, model: model.providerModel });
@@ -231,7 +263,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
       const providerMessage = upstream.data?.error?.message || upstream.data?.message || 'provider request failed';
       const providerCode = upstream.data?.error?.code || upstream.data?.code || 'PROVIDER_ERROR';
       const status = upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502;
-      return apiError(res, status, 'PROVIDER_ERROR', providerMessage, { provider: provider.id, providerCode, upstreamStatus: upstream.status, upstreamBaseUrl: provider.baseUrl, providerModel: model.providerModel });
+      return apiError(res, status, 'PROVIDER_ERROR', providerMessage, { provider: provider.id, providerCode, upstreamStatus: upstream.status, upstreamBaseUrl: provider.baseUrl, tried: triedChat, providerModel: model.providerModel });
     }
     res.status(upstream.status).json(responseData);
   } catch (err: any) {
