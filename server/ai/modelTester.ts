@@ -2,7 +2,6 @@ import axios from 'axios';
 import { config } from '../config.js';
 import { openAiCompatibleBody, nativeOllamaBody, providerChatTargets, providerHeaders } from './customProvider.js';
 import { commandCodeBody, commandCodeHeaders } from './special/commandCodeGo.js';
-import { OPENCODE_MESSAGES_MODELS, openCodeMessagesBody } from './special/openCodeGo.js';
 
 const PING_BODY = {
   messages: [{ role: 'user', content: 'ping' }],
@@ -26,13 +25,8 @@ export async function testProviderModel(provider: any, providerModel: string) {
     return raw.status < 400 ? { status: 'on' as const } : { status: 'off' as const, error: providerError(raw.data) };
   }
 
-  if (provider.id === 'opencode-go' && OPENCODE_MESSAGES_MODELS.has(providerModel)) {
-    const raw = await axios.post(`${provider.baseUrl}/messages`, openCodeMessagesBody(PING_BODY, providerModel), { timeout: config.defaultTimeoutMs, headers: { ...headers, 'anthropic-version': '2023-06-01' }, validateStatus: () => true });
-    return raw.status < 400 ? { status: 'on' as const } : { status: 'off' as const, error: providerError(raw.data) };
-  }
-
   let lastError = 'no compatible endpoint';
-  for (const target of providerChatTargets(provider.baseUrl)) {
+  for (const target of providerChatTargets(provider)) {
     const body = target.native ? nativeOllamaBody(PING_BODY, providerModel) : openAiCompatibleBody(PING_BODY, providerModel);
     const raw = await axios.post(target.url, body, { timeout: config.defaultTimeoutMs, headers, validateStatus: () => true });
     if (raw.status === 404) { lastError = `HTTP 404 at ${target.url}`; continue; }

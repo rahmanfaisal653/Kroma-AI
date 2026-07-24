@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { fetchCustomProviderModels } from '../ai/customProvider.js';
 import { COMMANDCODE_GO_MODELS } from '../ai/special/commandCodeGo.js';
-import { OPENCODE_GO_MODELS } from '../ai/special/openCodeGo.js';
 import { testProviderModel } from '../ai/modelTester.js';
 import { createProviderConfig, deleteProviderConfig, getProviderConfig, publicProviderConfigs, setProviderModelCheck, updateProviderConfig } from '../services/providerConfig.service.js';
 
@@ -17,10 +16,6 @@ router.get('/', async (_req, res) => {
     if (provider.id === 'commandcode-go') {
       const configured = Boolean(full?.apiKey);
       return { ...provider, status: configured ? 'on' : 'not_configured', error: configured ? undefined : 'Command Code Go API key is not configured', models: configured ? COMMANDCODE_GO_MODELS.map(id => `${provider.id}/${id}`) : [] };
-    }
-    if (provider.id === 'opencode-go') {
-      const configured = Boolean(full?.apiKey);
-      return { ...provider, status: configured ? 'on' : 'not_configured', error: configured ? undefined : 'OpenCode Go API key is not configured', models: configured ? OPENCODE_GO_MODELS.map(id => `${provider.id}/${id}`) : [] };
     }
     const checked = await fetchCustomProviderModels({ ...provider, apiKey: full?.apiKey });
     return { ...provider, status: checked.status, error: checked.error, models: checked.models };
