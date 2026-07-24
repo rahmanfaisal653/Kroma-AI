@@ -11,6 +11,7 @@ import { ErrorBoundary } from './ui/ErrorBoundary';
 
 // Lazy-loaded pages
 const ModelsPage = lazy(() => import('./features/models/ModelsPage'));
+const ProviderDetailPage = lazy(() => import('./features/models/ProviderDetailPage'));
 const KeysPage = lazy(() => import('./features/keys/KeysPage'));
 const UsagePage = lazy(() => import('./features/usage/UsagePage'));
 const DocsPage = lazy(() => import('./features/docs/DocsPage'));
@@ -61,6 +62,7 @@ function AppRoutes() {
           <Route path="home" element={<HomePage />} />
           <Route path="gateway" element={<GatewayLandingPage />} />
           <Route path="models" element={<ModelsPage />} />
+          <Route path="models/:id" element={<ProviderDetailPage />} />
           <Route path="keys" element={<KeysPage />} />
           <Route path="usage" element={<UsagePage />} />
           <Route path="docs" element={<DocsPage />} />

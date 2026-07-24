@@ -1,7 +1,10 @@
 import { Router } from 'express';
-import axios from 'axios';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { createProviderConfig, deleteProviderConfig, getProviderConfig, publicProviderConfigs, updateProviderConfig } from '../services/providerConfig.service.js';
+import { fetchCustomProviderModels } from '../ai/customProvider.js';
+import { COMMANDCODE_GO_MODELS } from '../ai/special/commandCodeGo.js';
+import { OPENCODE_GO_MODELS } from '../ai/special/openCodeGo.js';
+import { testProviderModel } from '../ai/modelTester.js';
+import { createProviderConfig, deleteProviderConfig, getProviderConfig, publicProviderConfigs, setProviderModelCheck, updateProviderConfig } from '../services/providerConfig.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -9,23 +12,18 @@ router.use(requireAuth);
 router.get('/', async (_req, res) => {
   const providers = await publicProviderConfigs();
   const data = await Promise.all(providers.map(async provider => {
-    if (provider.enabled === false) return { ...provider, status: 'disabled' };
-    if (provider.id === 'openai' && !provider.configured) return { ...provider, status: 'not_configured' };
-    try {
-      const full = await getProviderConfig(provider.id);
-      const headers: Record<string, string> = {};
-      if (full?.apiKey) {
-        headers.Authorization = ['Bearer', full.apiKey].join(' ');
-        headers['x-api-key'] = full.apiKey;
-      }
-      const native = !String(provider.baseUrl).endsWith('/v1');
-      let response = await axios.get(`${provider.baseUrl}${native ? '/api/tags' : '/models'}`, { timeout: 3000, headers, validateStatus: () => true });
-      if (response.status === 404 && !native) response = await axios.get(`${provider.baseUrl.replace(/\/v1$/, '')}/api/tags`, { timeout: 3000, headers, validateStatus: () => true });
-      if (response.status >= 400) throw new Error(`GET models failed: HTTP ${response.status}`);
-      return { ...provider, status: 'on' };
-    } catch (err: any) {
-      return { ...provider, status: 'error', error: err.message };
+    if (provider.enabled === false) return { ...provider, status: 'disabled', models: [] };
+    const full = await getProviderConfig(provider.id);
+    if (provider.id === 'commandcode-go') {
+      const configured = Boolean(full?.apiKey);
+      return { ...provider, status: configured ? 'on' : 'not_configured', error: configured ? undefined : 'Command Code Go API key is not configured', models: configured ? COMMANDCODE_GO_MODELS.map(id => `${provider.id}/${id}`) : [] };
     }
+    if (provider.id === 'opencode-go') {
+      const configured = Boolean(full?.apiKey);
+      return { ...provider, status: configured ? 'on' : 'not_configured', error: configured ? undefined : 'OpenCode Go API key is not configured', models: configured ? OPENCODE_GO_MODELS.map(id => `${provider.id}/${id}`) : [] };
+    }
+    const checked = await fetchCustomProviderModels({ ...provider, apiKey: full?.apiKey });
+    return { ...provider, status: checked.status, error: checked.error, models: checked.models };
   }));
   res.json(data);
 });
@@ -38,6 +36,8 @@ router.post('/', async (req, res) => {
     token: req.body?.apiKey,
     enabled: req.body?.enabled,
     visibility: req.body?.visibility,
+    chatPath: req.body?.chatPath,
+    modelsPath: req.body?.modelsPath,
   });
   if (!created) return res.status(400).json({ error: 'invalid or duplicate provider' });
   res.status(201).json({ ...(await publicProviderConfigs()).find(p => p.id === created.id) });
@@ -50,9 +50,22 @@ router.put('/:id', async (req, res) => {
     token: req.body?.apiKey,
     enabled: req.body?.enabled,
     visibility: req.body?.visibility,
+    chatPath: req.body?.chatPath,
+    modelsPath: req.body?.modelsPath,
   });
   if (!updated) return res.status(404).json({ error: 'provider not found' });
   res.json({ ...(await publicProviderConfigs()).find(p => p.id === updated.id) });
+});
+
+router.post('/:id/test-model', async (req, res) => {
+  const provider = await getProviderConfig(req.params.id);
+  const model = String(req.body?.model || '').trim();
+  if (!provider) return res.status(404).json({ error: 'provider not found' });
+  if (!model) return res.status(400).json({ error: 'model is required' });
+  const providerModel = model.startsWith(`${provider.id}/`) ? model.slice(provider.id.length + 1) : model;
+  const result = await testProviderModel(provider, providerModel);
+  await setProviderModelCheck(provider.id, `${provider.id}/${providerModel}`, result);
+  res.json({ model: `${provider.id}/${providerModel}`, ...result });
 });
 
 router.delete('/:id', async (req, res) => {

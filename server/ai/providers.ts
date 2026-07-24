@@ -7,13 +7,15 @@ export type ProviderConfig = {
   name: string;
   baseUrl: string;
   apiKey?: string;
+  chatPath?: string;
+  modelsPath?: string;
 };
 
 export function getProviders(): Record<ProviderId, ProviderConfig> {
   return {
-    openai: { id: 'openai', name: 'OpenAI', baseUrl: config.openaiBaseUrl, apiKey: config.openaiApiKey },
-    ollama: { id: 'ollama', name: 'Ollama', baseUrl: config.ollamaBaseUrl },
-    lmstudio: { id: 'lmstudio', name: 'LM Studio', baseUrl: config.lmstudioBaseUrl },
+    openai: { id: 'openai', name: 'OpenAI', baseUrl: config.openaiBaseUrl, apiKey: config.openaiApiKey, chatPath: '/chat/completions', modelsPath: '/models' },
+    ollama: { id: 'ollama', name: 'Ollama', baseUrl: config.ollamaBaseUrl, chatPath: '/chat/completions', modelsPath: '/models' },
+    lmstudio: { id: 'lmstudio', name: 'LM Studio', baseUrl: config.lmstudioBaseUrl, chatPath: '/chat/completions', modelsPath: '/models' },
     'opencode-go': { id: 'opencode-go', name: 'OpenCode Go', baseUrl: 'https://opencode.ai/zen/go/v1' },
     'commandcode-go': { id: 'commandcode-go', name: 'Command Code Go', baseUrl: 'https://api.commandcode.ai/alpha/generate' },
   };

@@ -73,19 +73,31 @@ async function gatewayModels(ownerType: 'internal' | 'partner') {
   const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, ownerType));
   const groups = await Promise.all(providers.map(async provider => {
     const result = await fetchProviderModels(provider);
-    return result.models.map(id => ({
-      id,
-      object: 'model',
-      created: 0,
-      owned_by: provider.id,
-      provider: provider.id as any,
-      provider_name: provider.name,
-      providerModel: id.slice(provider.id.length + 1),
-      status: result.status,
-      error: result.error,
-    }));
+    return result.models.map(id => {
+      const checked = provider.model_checks?.[id];
+      return {
+        id,
+        object: 'model',
+        created: 0,
+        owned_by: provider.id,
+        provider: provider.id as any,
+        provider_name: provider.name,
+        providerModel: id.slice(provider.id.length + 1),
+        status: checked?.status || 'unknown',
+        error: checked?.error || result.error,
+        checked_at: checked?.checked_at,
+      };
+    });
   }));
   return groups.flat();
+}
+
+async function logGatewayFailure(req: any, modelSlug: string, statusCode: number, errorMessage: string, started: number) {
+  if (!req.gatewayKey) return;
+  await Promise.allSettled([
+    touchGatewayKey(req.gatewayKey.id),
+    logUsage({ userId: 0, apiKeyId: req.gatewayKey.id, endpoint: req.path || '/v1', modelSlug, inputTokens: 0, outputTokens: 0, totalTokens: 0, latencyMs: Date.now() - started, statusCode, errorMessage, ipAddress: req.ip, userAgent: req.get('user-agent') }),
+  ]);
 }
 
 router.get('/', async (req, res) => {
@@ -100,8 +112,10 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/models', requireGatewayKey, async (req, res) => {
+  const started = Date.now();
   const ownerType = req.gatewayKey?.owner_type === 'internal' ? 'internal' : 'partner';
   const models = await gatewayModels(ownerType);
+  await Promise.allSettled([touchGatewayKey(req.gatewayKey!.id), logUsage({ userId: 0, apiKeyId: req.gatewayKey!.id, endpoint: '/v1/models', modelSlug: 'model-list', inputTokens: 0, outputTokens: 0, totalTokens: 0, latencyMs: Date.now() - started, statusCode: 200, ipAddress: req.ip, userAgent: req.get('user-agent') })]);
   res.json({ object: 'list', data: models });
 });
 
@@ -110,23 +124,23 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
   const started = Date.now();
   const modelId = String(req.body?.model || '').trim();
   let messages = req.body?.messages;
-  if (!modelId) return apiError(res, 400, 'VALIDATION_ERROR', 'model is required', { example: 'pchitam/llama3:latest' });
-  if (!modelId.includes('/')) return apiError(res, 400, 'VALIDATION_ERROR', 'model must use provider prefix: prefix/model-name', { received: modelId, example: 'token-router/provider-model-name' });
-  if (!Array.isArray(messages)) return apiError(res, 400, 'VALIDATION_ERROR', 'messages must be an array', { example: [{ role: 'user', content: 'Halo' }] });
+  if (!modelId) { await logGatewayFailure(req, '-', 400, 'model is required', started); return apiError(res, 400, 'VALIDATION_ERROR', 'model is required', { example: 'pchitam/llama3:latest' }); }
+  if (!modelId.includes('/')) { await logGatewayFailure(req, modelId, 400, 'model must use provider prefix', started); return apiError(res, 400, 'VALIDATION_ERROR', 'model must use provider prefix: prefix/model-name', { received: modelId, example: 'token-router/provider-model-name' }); }
+  if (!Array.isArray(messages)) { await logGatewayFailure(req, modelId, 400, 'messages must be an array', started); return apiError(res, 400, 'VALIDATION_ERROR', 'messages must be an array', { example: [{ role: 'user', content: 'Halo' }] }); }
 
   const fixedModel = getModel(modelId);
   const prefix = modelId.includes('/') ? modelId.split('/')[0] : '';
   const dynamicProvider = fixedModel ? null : await getProviderConfig(prefix);
   const model = fixedModel || (dynamicProvider ? { id: modelId, provider: dynamicProvider.id as any, providerModel: modelId.slice(prefix.length + 1) || 'default', enabled: true } : undefined);
-  if (!model) return apiError(res, 404, 'MODEL_NOT_FOUND', 'model/provider not found', { received: modelId, providerPrefix: prefix, hint: 'Check GET /v1/models and use one of the returned model ids.' });
+  if (!model) { await logGatewayFailure(req, modelId, 404, 'model/provider not found', started); return apiError(res, 404, 'MODEL_NOT_FOUND', 'model/provider not found', { received: modelId, providerPrefix: prefix, hint: 'Check GET /v1/models and use one of the returned model ids.' }); }
   if (!req.gatewayKey) return apiError(res, 401, 'INVALID_API_KEY', 'invalid API key');
 
   const configured = await getProviderConfig(model.provider);
   const fallback = fixedModel ? getProvider(model.provider as any) : undefined;
   const provider = configured ? { id: configured.id, baseUrl: configured.baseUrl, apiKey: configured.apiKey } : fallback;
-  if (!provider) return apiError(res, 404, 'PROVIDER_NOT_FOUND', 'provider not found', { provider: model.provider, hint: 'Create provider in Providers menu.' });
-  if (configured && !canUseProvider(configured, req.gatewayKey.owner_type)) return apiError(res, 403, 'PROVIDER_NOT_ALLOWED', 'provider is not available for this API key', { provider: configured.id, visibility: configured.visibility, keyType: req.gatewayKey.owner_type });
-  if (provider.id === 'openai' && !provider.apiKey) return apiError(res, 503, 'PROVIDER_NOT_CONFIGURED', 'OpenAI API key is not configured', { provider: provider.id, hint: 'Set provider API key in Providers menu.' });
+  if (!provider) { await logGatewayFailure(req, modelId, 404, 'provider not found', started); return apiError(res, 404, 'PROVIDER_NOT_FOUND', 'provider not found', { provider: model.provider, hint: 'Create provider in Providers menu.' }); }
+  if (configured && !canUseProvider(configured, req.gatewayKey.owner_type)) { await logGatewayFailure(req, modelId, 403, 'provider not available for this API key', started); return apiError(res, 403, 'PROVIDER_NOT_ALLOWED', 'provider is not available for this API key', { provider: configured.id, visibility: configured.visibility, keyType: req.gatewayKey.owner_type }); }
+  if (provider.id === 'openai' && !provider.apiKey) { await logGatewayFailure(req, modelId, 503, 'OpenAI API key is not configured', started); return apiError(res, 503, 'PROVIDER_NOT_CONFIGURED', 'OpenAI API key is not configured', { provider: provider.id, hint: 'Set provider API key in Providers menu.' }); }
   const estimatedInput = estimateTokens(messages);
   try {
     const stream = req.body?.stream === true;
@@ -149,7 +163,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
       triedChat.push(`${provider.baseUrl}/messages`);
       upstream = await axios.post(`${provider.baseUrl}/messages`, openCodeMessagesBody(req.body, model.providerModel), { timeout: config.defaultTimeoutMs, responseType: 'json', headers: { ...headers, 'anthropic-version': '2023-06-01' }, validateStatus: () => true });
       opencodeMessages = true;
-    } else for (const target of providerChatTargets(provider.baseUrl)) {
+    } else for (const target of providerChatTargets(provider)) {
       if (stream && target.native) continue;
       triedChat.push(target.url);
       const body = target.native ? nativeOllamaBody(req.body, model.providerModel) : openAiCompatibleBody({ ...req.body, messages, stream }, model.providerModel);

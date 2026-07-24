@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Edit2, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { providerStatusApi } from '../../services/api';
 import { Button } from '../../ui/Button';
@@ -10,6 +11,8 @@ type ProviderStatus = {
   id: string;
   name: string;
   baseUrl: string;
+  chatPath?: string;
+  modelsPath?: string;
   configured?: boolean;
   enabled?: boolean;
   visibility?: Visibility[];
@@ -17,10 +20,12 @@ type ProviderStatus = {
   custom?: boolean;
   status?: string;
   error?: string;
+  models?: string[];
+  model_checks?: Record<string, { status: 'on' | 'off'; error?: string; checked_at?: string }>;
 };
-type Form = { id: string; originalId?: string; name: string; baseUrl: string; secret: string; enabled: boolean; visibility: Visibility[]; mode: 'create' | 'edit' };
+type Form = { id: string; originalId?: string; name: string; baseUrl: string; secret: string; chatPath: string; modelsPath: string; enabled: boolean; visibility: Visibility[]; mode: 'create' | 'edit' };
 
-const emptyForm: Form = { id: '', name: '', baseUrl: '', secret: '', enabled: true, visibility: ['internal'], mode: 'create' };
+const emptyForm: Form = { id: '', name: '', baseUrl: '', secret: '', chatPath: '/chat/completions', modelsPath: '/models', enabled: true, visibility: ['internal'], mode: 'create' };
 const visibilityLabels: Record<Visibility, string> = { internal: 'Internal', partner: 'Partner' };
 const cleanVisibility = (value?: Visibility[] | string): Visibility[] => {
   const raw = Array.isArray(value) ? value : value === 'both' ? ['internal', 'partner'] : value ? [value] : ['internal'];
@@ -35,7 +40,7 @@ const toggleVisibility = (current: Visibility[], value: Visibility) => {
 export default function ModelsPage() {
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
   const [form, setForm] = useState<Form | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
@@ -67,6 +72,8 @@ export default function ModelsPage() {
     name: p.name || p.id,
     baseUrl: p.baseUrl,
     secret: '',
+    chatPath: p.chatPath || '/chat/completions',
+    modelsPath: p.modelsPath || '/models',
     enabled: p.enabled !== false,
     visibility: cleanVisibility(p.visibility),
     mode: 'edit',
@@ -83,6 +90,8 @@ export default function ModelsPage() {
       await providerStatusApi.update(p.id, {
         name: p.name || p.id,
         baseUrl: p.baseUrl,
+        chatPath: p.chatPath || '/chat/completions',
+        modelsPath: p.modelsPath || '/models',
         enabled: next.enabled,
         visibility: next.visibility,
       });
@@ -92,6 +101,8 @@ export default function ModelsPage() {
       await load();
     }
   };
+
+
 
   return <div className="h-full overflow-y-auto"><div className="max-w-5xl mx-auto p-6 space-y-6 animate-fade-in">
     <div className="flex items-start justify-between gap-3">
@@ -107,6 +118,10 @@ export default function ModelsPage() {
       </div>
       <Input label="Base URL" value={form.baseUrl} onChange={e => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://api.groq.com/openai/v1" />
       <Input label="API Key" value={form.secret} onChange={e => setForm({ ...form, secret: e.target.value })} placeholder="Kosongkan kalau provider lokal" />
+      <div className="grid md:grid-cols-2 gap-3">
+        <Input label="Models Path" value={form.modelsPath} onChange={e => setForm({ ...form, modelsPath: e.target.value })} placeholder="/models" hint="Kroma fetch baseUrl + modelsPath" />
+        <Input label="Chat Path" value={form.chatPath} onChange={e => setForm({ ...form, chatPath: e.target.value })} placeholder="/chat/completions" hint="Kroma call baseUrl + chatPath" />
+      </div>
       <div className="grid sm:grid-cols-2 gap-3">
         <div><p className="text-xs text-[var(--color-text-muted)] mb-1">Status</p><div className="flex gap-2"><Toggle active={form.enabled} onClick={() => setForm({ ...form, enabled: true })}>Enable</Toggle><Toggle active={!form.enabled} onClick={() => setForm({ ...form, enabled: false })}>Disable</Toggle></div></div>
         <div><p className="text-xs text-[var(--color-text-muted)] mb-1">Visibility</p><div className="flex flex-wrap gap-2">{(['internal', 'partner'] as Visibility[]).map(v => <Toggle key={v} active={form.visibility.includes(v)} onClick={() => setForm({ ...form, visibility: toggleVisibility(form.visibility, v) })}>{visibilityLabels[v]}</Toggle>)}</div></div>
@@ -118,14 +133,18 @@ export default function ModelsPage() {
       {providers.map(p => <div key={p.id} className="kroma-card-hover rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 space-y-3 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-2"><h2 className="font-semibold text-[var(--color-text)]">{p.name || p.id}</h2><span className={`text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded border ${p.enabled === false ? 'border-slate-500/40 bg-slate-500/10 text-slate-400' : p.status === 'on' ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400' : p.status === 'not_configured' ? 'border-amber-500/40 bg-amber-500/15 text-amber-400' : 'border-red-500/40 bg-red-500/15 text-red-400'}`}>{p.enabled === false ? 'disabled' : p.status || 'unknown'}</span></div>
         <p className="text-xs font-mono text-[var(--color-text-muted)] break-all">{p.baseUrl}</p>
+          <p className="text-[11px] font-mono text-[var(--color-text-muted)] break-all mt-1">models: {p.modelsPath || '/models'} · chat: {p.chatPath || '/chat/completions'}</p>
         <p className="text-xs text-[var(--color-text-muted)]">model: <code>{p.id}/model-name</code></p>
         <p className="text-xs text-[var(--color-text-muted)]">{p.custom ? 'custom' : p.overridden ? 'custom config' : 'env default'} · key: {p.configured ? 'set' : 'empty'} · visibility: {cleanVisibility(p.visibility).map(v => visibilityLabels[v]).join(', ')}</p>
         {p.error && <p className="text-xs text-red-400">{p.error}</p>}
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-3 text-xs text-[var(--color-text-muted)]">
+          {p.models?.length || 0} models · open detail page to copy/test one by one.
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => quickUpdate(p, { enabled: p.enabled === false })}>{p.enabled === false ? 'Enable' : 'Disable'}</Button>
           {(['internal', 'partner'] as Visibility[]).map(v => <Button key={v} size="sm" variant={cleanVisibility(p.visibility).includes(v) ? 'primary' : 'outline'} onClick={() => quickUpdate(p, { visibility: toggleVisibility(cleanVisibility(p.visibility), v) })}>{visibilityLabels[v]}</Button>)}
         </div>
-        <div className="flex gap-2"><Button size="sm" variant="outline" icon={<Edit2 size={13} />} onClick={() => edit(p)}>Edit</Button><Button size="sm" variant="outline" icon={<Trash2 size={13} />} onClick={() => remove(p)}>Delete</Button></div>
+        <div className="flex flex-wrap gap-2"><Link to={`/models/${p.id}`}><Button size="sm" variant="outline">Models</Button></Link><Button size="sm" variant="outline" icon={<Edit2 size={13} />} onClick={() => edit(p)}>Edit</Button><Button size="sm" variant="outline" icon={<Trash2 size={13} />} onClick={() => remove(p)}>Delete</Button></div>
       </div>)}
     </div>
   </div></div>;

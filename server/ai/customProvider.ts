@@ -9,19 +9,19 @@ export function providerHeaders(provider: any, json = false) {
   return headers;
 }
 
-export function providerModelUrls(baseUrl: string) {
-  const base = String(baseUrl).replace(/\/+$/, '');
-  const root = base.replace(/\/v1$/i, '');
-  return [...new Set(base.endsWith('/v1') ? [`${base}/models`, `${root}/api/tags`] : [`${base}/models`, `${base}/v1/models`, `${base}/api/tags`])];
+function joinUrl(baseUrl: string, path: string) {
+  const base = String(baseUrl || '').replace(/\/+$/, '');
+  const suffix = String(path || '').startsWith('/') ? String(path || '') : `/${path || ''}`;
+  return `${base}${suffix}`;
 }
 
-export function providerChatTargets(baseUrl: string) {
-  const base = String(baseUrl).replace(/\/+$/, '');
-  const root = base.replace(/\/v1$/i, '');
-  return [...new Set(base.endsWith('/v1')
-    ? [{ url: `${base}/chat/completions`, native: false }, { url: `${root}/api/chat`, native: true }]
-    : [{ url: `${base}/chat/completions`, native: false }, { url: `${base}/v1/chat/completions`, native: false }, { url: `${base}/api/chat`, native: true }]
-  )];
+export function providerModelUrls(provider: any) {
+  return [joinUrl(provider.baseUrl, provider.modelsPath || '/models')];
+}
+
+export function providerChatTargets(provider: any) {
+  const path = provider.chatPath || '/chat/completions';
+  return [{ url: joinUrl(provider.baseUrl, path), native: path.endsWith('/api/chat') || path === '/api/chat' }];
 }
 
 export async function fetchCustomProviderModels(provider: any) {
@@ -29,7 +29,7 @@ export async function fetchCustomProviderModels(provider: any) {
   const tried: string[] = [];
   let lastError = '';
 
-  for (const url of providerModelUrls(provider.baseUrl)) {
+  for (const url of providerModelUrls(provider)) {
     tried.push(url);
     try {
       const res = await axios.get(url, { timeout: 5000, headers, validateStatus: () => true });

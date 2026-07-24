@@ -6,8 +6,9 @@ const CATEGORY = 'provider_config';
 const FIXED_IDS = ['openai', 'ollama', 'lmstudio', 'opencode-go', 'commandcode-go'] as const;
 
 type Audience = 'internal' | 'partner';
-type Input = { id?: string; name?: string; baseUrl?: string; token?: string; enabled?: boolean; visibility?: Audience[] | string };
-type StoredProvider = ProviderConfig & { overridden?: boolean; custom?: boolean; configured: boolean; enabled: boolean; visibility: Audience[] };
+type Input = { id?: string; name?: string; baseUrl?: string; token?: string; enabled?: boolean; visibility?: Audience[] | string; chatPath?: string; modelsPath?: string };
+type ModelCheck = Record<string, { status: 'on' | 'off'; error?: string; checked_at: string }>;
+type StoredProvider = ProviderConfig & { overridden?: boolean; custom?: boolean; configured: boolean; enabled: boolean; visibility: Audience[]; model_checks?: ModelCheck };
 
 function cleanUrl(value = '') {
   return value
@@ -26,7 +27,7 @@ function cleanVisibility(value?: Audience[] | string): Audience[] {
 }
 function safeProvider(provider: StoredProvider) {
   const { apiKey, ...safe } = provider;
-  return { ...safe, configured: Boolean(apiKey), enabled: provider.enabled !== false, visibility: cleanVisibility(provider.visibility) };
+  return { ...safe, configured: Boolean(apiKey), enabled: provider.enabled !== false, visibility: cleanVisibility(provider.visibility), chatPath: provider.chatPath || '/chat/completions', modelsPath: provider.modelsPath || '/models', model_checks: provider.model_checks || {} };
 }
 
 export function fixedProviderIds() { return [...FIXED_IDS] as ProviderId[]; }
@@ -53,6 +54,9 @@ export async function getProviderConfig(id: string): Promise<StoredProvider | nu
       configured: Boolean(apiKey),
       enabled: override.enabled !== false,
       visibility: cleanVisibility(override.visibility),
+      chatPath: override.chatPath || base.chatPath || '/chat/completions',
+      modelsPath: override.modelsPath || base.modelsPath || '/models',
+      model_checks: override.model_checks || {},
       overridden: Boolean(row),
       custom: false,
     };
@@ -97,6 +101,9 @@ export async function createProviderConfig(input: Input) {
     token: input.token || '',
     enabled: input.enabled !== false,
     visibility: cleanVisibility(input.visibility),
+    chatPath: input.chatPath || '/chat/completions',
+    modelsPath: input.modelsPath || '/models',
+    model_checks: {},
   });
   await db.create(TABLE, { title: input.name?.trim() || id, slug: slug(id), category: CATEGORY, content, published: true });
   return getProviderConfig(id);
@@ -114,6 +121,9 @@ export async function updateProviderConfig(id: string, input: Input) {
     token: input.token ?? current.apiKey ?? '',
     enabled: input.enabled ?? current.enabled,
     visibility: cleanVisibility(input.visibility || current.visibility),
+    chatPath: input.chatPath || current.chatPath || '/chat/completions',
+    modelsPath: input.modelsPath || current.modelsPath || '/models',
+    model_checks: current.model_checks || {},
   });
   if (row) await db.update(TABLE, row.id, { title: input.name?.trim() || current.name, content, published: true });
   else await db.create(TABLE, { title: current.name, slug: slug(clean), category: CATEGORY, content, published: true });
@@ -129,7 +139,7 @@ export async function deleteProviderConfig(id: string) {
     return;
   }
   const base = getProvider(clean as ProviderId);
-  const content = JSON.stringify({ name: base.name, baseUrl: base.baseUrl, token: base.apiKey || '', enabled: false, visibility: 'internal', deleted: true });
+  const content = JSON.stringify({ name: base.name, baseUrl: base.baseUrl, token: base.apiKey || '', enabled: false, visibility: 'internal', chatPath: base.chatPath || '/chat/completions', modelsPath: base.modelsPath || '/models', deleted: true });
   if (row) await db.update(TABLE, row.id, { title: base.name, content, published: true });
   else await db.create(TABLE, { title: base.name, slug: slug(clean), category: CATEGORY, content, published: true });
 }
@@ -139,3 +149,25 @@ export async function publicProviderConfigs() {
 }
 
 export { getProviders };
+
+export async function setProviderModelCheck(providerId: string, modelId: string, result: { status: 'on' | 'off'; error?: string }) {
+  const clean = cleanId(providerId);
+  const current = await getProviderConfig(clean);
+  if (!current) return null;
+  const rows = await providerRows();
+  const row = rows.find((item: any) => item.slug === slug(clean));
+  const checks = { ...(current.model_checks || {}), [modelId]: { ...result, checked_at: new Date().toISOString() } };
+  const content = JSON.stringify({
+    name: current.name,
+    baseUrl: current.baseUrl,
+    token: current.apiKey || '',
+    enabled: current.enabled,
+    visibility: current.visibility,
+    chatPath: current.chatPath || '/chat/completions',
+    modelsPath: current.modelsPath || '/models',
+    model_checks: checks,
+  });
+  if (row) await db.update(TABLE, row.id, { title: current.name, content, published: true });
+  else await db.create(TABLE, { title: current.name, slug: slug(clean), category: CATEGORY, content, published: true });
+  return getProviderConfig(clean);
+}
