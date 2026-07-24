@@ -42,7 +42,7 @@ export default function LoginPage() {
         <div className="max-w-xl">
           <p className="font-mono text-xs uppercase tracking-wider text-[var(--color-text-muted)]">owner console</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight">Secure access to your AI gateway.</h1>
-          <p className="mt-4 text-sm leading-7 text-[var(--color-text-muted)]">Manage provider routing, partner API keys, usage logs, and Chroma-backed RAG sources from one internal dashboard.</p>
+          <p className="mt-4 text-sm leading-7 text-[var(--color-text-muted)]">Manage provider routing, partner API keys, and usage logs from one internal dashboard.</p>
           <div className="mt-8 grid grid-cols-3 gap-3">
             <Panel icon={<ShieldCheck size={16} />} title="Keys" value="kg_ auth" />
             <Panel icon={<TerminalSquare size={16} />} title="API" value="/v1" />

@@ -16,8 +16,6 @@ import { apiLimiter } from './middleware/rateLimiter.middleware.js';
 // Routes
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
-import modelsRoutes from './routes/models.routes.js';
-
 
 // Dev-only routes (auto-disabled in production by the route guard)
 import devRoutes from './routes/dev.routes.js';
@@ -25,7 +23,6 @@ import devRoutes from './routes/dev.routes.js';
 import internalKeysRoutes from './routes/internal-keys.routes.js';
 import v1Routes from './routes/v1.routes.js';
 import providerStatusRoutes from './routes/provider-status.routes.js';
-import knowledgeRoutes from './routes/knowledge.routes.js';
 import { checkDependencies } from './services/health.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -77,17 +74,11 @@ app.get('/api/ready', async (req, res, next) => {
 // --- Public API Routes ---
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
-app.use('/api/apis', modelsRoutes);           // GET /api/apis
-app.use('/api', (req, res, next) => {           // GET /api/docs, /api/plans, /api/payment-methods
-  if (req.path === '/') return next();
-  return modelsRoutes(req, res, next);
-});
 app.use('/v1', v1Routes);                      // OpenAI-compatible gateway
 
 // --- Owner-managed gateway ---
 app.use('/api/internal-keys', internalKeysRoutes);
 app.use('/api/provider-status', providerStatusRoutes);
-app.use('/api/knowledge', knowledgeRoutes);
 
 // --- Dev-only Routes (gated by env + token; auto-404 in production) ---
 app.use('/api/dev', devRoutes);

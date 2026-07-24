@@ -43,7 +43,7 @@ export default function HomePage() {
         <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-[var(--color-text)]">Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}.</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-muted)]">Pantau provider, API key, usage, dan Knowledge/RAG dari satu dashboard owner.</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-muted)]">Pantau provider, API key, dan usage dari satu dashboard owner.</p>
             <p className="mt-1 text-xs text-[var(--color-text-muted)]">Dashboard auto-refresh tiap {REFRESH_SECONDS}s · last updated {lastUpdated || '-'}</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -83,8 +83,8 @@ export default function HomePage() {
         <div className="space-y-3">
           <Quick to="/usage" icon={<Activity size={16} />} title="Full API Usage" desc="Pagination, filters, export CSV, cleanup logs." />
           <Quick to="/docs" icon={<TerminalSquare size={16} />} title="Test chat endpoint" desc="Run cURL-style provider test." />
-          <Quick to="/knowledge" icon={<Database size={16} />} title="Knowledge / RAG" desc="Add text sources and test retrieval." />
-          <Quick to="/docs" icon={<FileText size={16} />} title="API documentation" desc="/v1, /v1/providers, chat completions." />
+          <Quick to="/docs" icon={<Database size={16} />} title="Gateway docs" desc="Endpoint reference and live tester." />
+          <Quick to="/docs" icon={<FileText size={16} />} title="API documentation" desc="/v1, /v1/models, chat completions." />
         </div>
       </section>
     </div>

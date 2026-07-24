@@ -2,16 +2,17 @@ import { Router } from 'express';
 import axios from 'axios';
 import { listModels, getModel } from '../ai/models.js';
 import { getProvider } from '../ai/providers.js';
+import { fetchCustomProviderModels, providerChatTargets, providerHeaders, openAiCompatibleBody, nativeOllamaBody, nativeOllamaToOpenAI, canUseProvider, visibleProviders } from '../ai/customProvider.js';
+import { COMMANDCODE_GO_MODELS, commandCodeBody, commandCodeHeaders, commandCodeToOpenAI } from '../ai/special/commandCodeGo.js';
+import { OPENCODE_GO_MODELS, OPENCODE_MESSAGES_MODELS, openCodeMessagesBody, openCodeMessagesToOpenAI } from '../ai/special/openCodeGo.js';
 import { requireGatewayKey } from '../middleware/internalApiKey.middleware.js';
 import { findGatewayKey, touchGatewayKey } from '../services/internalApiKey.service.js';
-import { logUsage } from '../services/gateway.service.js';
+import { logUsage } from '../services/usageLog.service.js';
 import { config } from '../config.js';
 import { getProviderConfig, listProviderConfigs } from '../services/providerConfig.service.js';
-import { resolveRagConfig } from '../../src/rag/runtimeConfig.js';
-import { createOllamaEmbedding } from '../../src/rag/ollamaService.js';
-import { queryKnowledgeDocsRaw } from '../../src/rag/chromaService.js';
 
 const router = Router();
+
 
 function apiError(res: any, status: number, code: string, message: string, details?: Record<string, unknown>) {
   return res.status(status).json({
@@ -40,62 +41,17 @@ function extractSseContent(raw: string): string {
   }).join('');
 }
 
-function providerHeaders(provider: any, json = false) {
-  const headers: Record<string, string> = json ? { 'Content-Type': 'application/json' } : {};
-  if (provider.apiKey) {
-    headers.Authorization = ['Bearer', provider.apiKey].join(' ');
-    headers['x-api-key'] = provider.apiKey;
-  }
-  return headers;
-}
-
-function providerModelUrls(baseUrl: string) {
-  const base = String(baseUrl).replace(/\/+$/, '');
-  const root = base.replace(/\/v1$/i, '');
-  return [...new Set(base.endsWith('/v1') ? [`${base}/models`, `${root}/api/tags`] : [`${base}/models`, `${base}/v1/models`, `${base}/api/tags`])];
-}
-
-function providerChatTargets(baseUrl: string) {
-  const base = String(baseUrl).replace(/\/+$/, '');
-  const root = base.replace(/\/v1$/i, '');
-  return [...new Set(base.endsWith('/v1')
-    ? [{ url: `${base}/chat/completions`, native: false }, { url: `${root}/api/chat`, native: true }]
-    : [{ url: `${base}/chat/completions`, native: false }, { url: `${base}/v1/chat/completions`, native: false }, { url: `${base}/api/chat`, native: true }]
-  )];
-}
-
 async function fetchProviderModels(provider: any) {
+  if (provider.id === 'opencode-go') {
+    return { status: provider.apiKey ? 'on' : 'not_configured', models: provider.apiKey ? OPENCODE_GO_MODELS.map(id => `${provider.id}/${id}`) : [] as string[], error: provider.apiKey ? undefined : 'OpenCode Go API key is not configured' };
+  }
+  if (provider.id === 'commandcode-go') {
+    return { status: provider.apiKey ? 'on' : 'not_configured', models: provider.apiKey ? COMMANDCODE_GO_MODELS.map(id => `${provider.id}/${id}`) : [] as string[], error: provider.apiKey ? undefined : 'Command Code Go API key is not configured' };
+  }
   if (provider.id === 'openai' && !provider.apiKey) {
     return { status: 'not_configured', models: [] as string[], error: 'OpenAI API key is not configured' };
   }
-  const headers = providerHeaders(provider);
-  const tried: string[] = [];
-  let lastError = '';
-  for (const url of providerModelUrls(provider.baseUrl)) {
-    tried.push(url);
-    try {
-      const res = await axios.get(url, { timeout: 5000, headers, validateStatus: () => true });
-      if (res.status === 404) { lastError = `HTTP 404 at ${url}`; continue; }
-      if (res.status >= 400) return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} models request failed: HTTP ${res.status}` };
-      const native = url.endsWith('/api/tags');
-      const data = native || Array.isArray(res.data?.models) ? res.data?.models : Array.isArray(res.data?.data) ? res.data.data : [];
-      const ids = (Array.isArray(data) ? data : []).map((item: any) => String(item?.id || item?.name || '').trim()).filter(Boolean);
-      return { status: 'on', models: ids.map((id: string) => id.startsWith(`${provider.id}/`) ? id : `${provider.id}/${id}`) };
-    } catch (err: any) {
-      lastError = err.code || err.message || 'request failed';
-    }
-  }
-  return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} models unavailable: ${lastError || 'no compatible endpoint'}; tried ${tried.join(', ')}` };
-}
-
-function visibilityIncludes(provider: any, audience: 'internal' | 'partner') {
-  const visibility = Array.isArray(provider.visibility) ? provider.visibility : provider.visibility === 'both' ? ['internal', 'partner'] : [provider.visibility || 'internal'];
-  return visibility.includes(audience);
-}
-
-function canUseProvider(provider: any, ownerType?: string) {
-  if (provider.enabled === false) return false;
-  return visibilityIncludes(provider, ownerType === 'internal' ? 'internal' : 'partner');
+  return fetchCustomProviderModels(provider);
 }
 
 async function ownerTypeFromRequest(req: any): Promise<'internal' | 'partner'> {
@@ -117,30 +73,28 @@ async function gatewayModels(ownerType: 'internal' | 'partner') {
   const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, ownerType));
   const groups = await Promise.all(providers.map(async provider => {
     const result = await fetchProviderModels(provider);
-    return result.models.map(id => ({ id, provider: provider.id as any, providerModel: id.slice(provider.id.length + 1), enabled: true }));
+    return result.models.map(id => ({
+      id,
+      object: 'model',
+      created: 0,
+      owned_by: provider.id,
+      provider: provider.id as any,
+      provider_name: provider.name,
+      providerModel: id.slice(provider.id.length + 1),
+      status: result.status,
+      error: result.error,
+    }));
   }));
   return groups.flat();
 }
 
-async function withRag(messages: any[], enabled: boolean) {
-  if (!enabled) return messages;
-  const lastUser = [...messages].reverse().find((m: any) => m?.role === 'user')?.content;
-  if (!lastUser) return messages;
-  const cfg = resolveRagConfig();
-  const embedding = await createOllamaEmbedding(cfg.ollamaBaseUrl, String(lastUser), cfg.embeddingModel);
-  const result = await queryKnowledgeDocsRaw(cfg.chromaBaseUrl, embedding, 4);
-  const docs = (result.documents?.[0] || []).filter(Boolean).slice(0, 4);
-  if (!docs.length) return messages;
-  return [{ role: 'system', content: `Gunakan konteks berikut bila relevan. Jika tidak ada jawaban di konteks, bilang tidak tahu.\n\n${docs.map((d: string, i: number) => `[${i + 1}] ${d}`).join('\n\n')}` }, ...messages];
-}
-
 router.get('/', async (req, res) => {
   const ownerType = await ownerTypeFromRequest(req);
-  const models = (await gatewayModels(ownerType)).map(model => ({ id: model.id, provider: model.provider }));
+  const models = await gatewayModels(ownerType);
   res.json({
     name: 'Kroma AI Gateway',
     base_url: '/v1',
-    endpoints: ['/v1', '/v1/models', '/v1/providers', '/v1/chat/completions'],
+    endpoints: ['/v1', '/v1/models', '/v1/chat/completions'],
     models,
   });
 });
@@ -148,33 +102,7 @@ router.get('/', async (req, res) => {
 router.get('/models', requireGatewayKey, async (req, res) => {
   const ownerType = req.gatewayKey?.owner_type === 'internal' ? 'internal' : 'partner';
   const models = await gatewayModels(ownerType);
-  res.json({
-    object: 'list',
-    data: models.map(model => ({
-      id: model.id,
-      object: 'model',
-      created: 0,
-      owned_by: model.provider,
-    })),
-  });
-});
-
-router.get('/providers', async (req, res) => {
-  const ownerType = await ownerTypeFromRequest(req);
-  const providers = (await listProviderConfigs()).filter(provider => canUseProvider(provider, ownerType));
-  const data = await Promise.all(providers.map(async provider => {
-    const result = await fetchProviderModels(provider);
-    return {
-      id: provider.id,
-      name: provider.name,
-      object: 'provider',
-      configured: provider.configured,
-      status: result.status,
-      error: result.error,
-      models: result.models,
-    };
-  }));
-  res.json({ object: 'list', data });
+  res.json({ object: 'list', data: models });
 });
 
 
@@ -190,7 +118,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
   const prefix = modelId.includes('/') ? modelId.split('/')[0] : '';
   const dynamicProvider = fixedModel ? null : await getProviderConfig(prefix);
   const model = fixedModel || (dynamicProvider ? { id: modelId, provider: dynamicProvider.id as any, providerModel: modelId.slice(prefix.length + 1) || 'default', enabled: true } : undefined);
-  if (!model) return apiError(res, 404, 'MODEL_NOT_FOUND', 'model/provider not found', { received: modelId, providerPrefix: prefix, hint: 'Check GET /v1/providers and use one of the returned model ids.' });
+  if (!model) return apiError(res, 404, 'MODEL_NOT_FOUND', 'model/provider not found', { received: modelId, providerPrefix: prefix, hint: 'Check GET /v1/models and use one of the returned model ids.' });
   if (!req.gatewayKey) return apiError(res, 401, 'INVALID_API_KEY', 'invalid API key');
 
   const configured = await getProviderConfig(model.provider);
@@ -199,26 +127,32 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
   if (!provider) return apiError(res, 404, 'PROVIDER_NOT_FOUND', 'provider not found', { provider: model.provider, hint: 'Create provider in Providers menu.' });
   if (configured && !canUseProvider(configured, req.gatewayKey.owner_type)) return apiError(res, 403, 'PROVIDER_NOT_ALLOWED', 'provider is not available for this API key', { provider: configured.id, visibility: configured.visibility, keyType: req.gatewayKey.owner_type });
   if (provider.id === 'openai' && !provider.apiKey) return apiError(res, 503, 'PROVIDER_NOT_CONFIGURED', 'OpenAI API key is not configured', { provider: provider.id, hint: 'Set provider API key in Providers menu.' });
-  messages = await withRag(messages, req.body?.rag === true);
-
   const estimatedInput = estimateTokens(messages);
   try {
     const stream = req.body?.stream === true;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (provider.apiKey) {
-      headers.Authorization = ['Bearer', provider.apiKey].join(' ');
-      headers['x-api-key'] = provider.apiKey;
-    }
+    const headers = providerHeaders(provider, true);
 
     let nativeOllama = false;
+    let opencodeMessages = false;
     let upstream: any = null;
     let triedChat: string[] = [];
-    for (const target of providerChatTargets(provider.baseUrl)) {
+
+    if (provider.id === 'commandcode-go') {
+      if (stream) return apiError(res, 400, 'VALIDATION_ERROR', 'Command Code Go is non-streaming in Kroma MVP', { provider: provider.id, model: model.providerModel });
+      const url = provider.baseUrl;
+      const body = commandCodeBody(model.providerModel, req.body, messages);
+      triedChat.push(url);
+      const raw = await axios.post(url, body, { timeout: config.defaultTimeoutMs, responseType: 'text', headers: commandCodeHeaders(headers), validateStatus: () => true, transformResponse: [(data) => data] });
+      upstream = { ...raw, data: raw.status >= 400 ? (() => { try { return JSON.parse(raw.data); } catch { return { error: { message: raw.data } }; } })() : commandCodeToOpenAI(raw.data, model.id) };
+    } else if (provider.id === 'opencode-go' && OPENCODE_MESSAGES_MODELS.has(model.providerModel)) {
+      if (stream) return apiError(res, 400, 'VALIDATION_ERROR', 'OpenCode Go messages models are non-streaming in Kroma MVP', { provider: provider.id, model: model.providerModel });
+      triedChat.push(`${provider.baseUrl}/messages`);
+      upstream = await axios.post(`${provider.baseUrl}/messages`, openCodeMessagesBody(req.body, model.providerModel), { timeout: config.defaultTimeoutMs, responseType: 'json', headers: { ...headers, 'anthropic-version': '2023-06-01' }, validateStatus: () => true });
+      opencodeMessages = true;
+    } else for (const target of providerChatTargets(provider.baseUrl)) {
       if (stream && target.native) continue;
       triedChat.push(target.url);
-      const body = target.native
-        ? { model: model.providerModel, messages, stream: false }
-        : { ...req.body, messages, model: model.providerModel, stream };
+      const body = target.native ? nativeOllamaBody(req.body, model.providerModel) : openAiCompatibleBody({ ...req.body, messages, stream }, model.providerModel);
       const candidate = await axios.post(target.url, body, { timeout: config.defaultTimeoutMs, responseType: stream ? 'stream' : 'json', headers, validateStatus: () => true });
       upstream = candidate;
       nativeOllama = target.native;
@@ -246,13 +180,11 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
       return;
     }
 
-    const responseData = nativeOllama ? {
-      id: `chatcmpl-${Date.now()}`,
-      object: 'chat.completion',
-      created: Math.floor(Date.now() / 1000),
-      model: model.id,
-      choices: [{ index: 0, message: { role: 'assistant', content: upstream.data?.message?.content || '' }, finish_reason: upstream.data?.done ? 'stop' : null }],
-    } : upstream.data;
+    const responseData = nativeOllama
+      ? nativeOllamaToOpenAI(upstream.data, model.id, model.providerModel)
+      : opencodeMessages
+        ? openCodeMessagesToOpenAI(upstream.data, model.id, model.providerModel)
+        : upstream.data;
     const usage = responseData?.usage || {};
     const outputTokens = Number(usage.completion_tokens) || estimateTokens(responseData?.choices?.[0]?.message?.content || responseData);
     const inputTokens = Number(usage.prompt_tokens) || estimatedInput;

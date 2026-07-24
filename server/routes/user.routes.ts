@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../services/db.service.js';
 import { listGatewayKeys } from '../services/internalApiKey.service.js';
 import { listProviderConfigs } from '../services/providerConfig.service.js';
-import { generateApiKey, maskApiKey, isLikelyUserApiKey, hashApiKey, usersHasColumn, toOwnerUser } from '../services/auth.service.js';
+import { toOwnerUser } from '../services/auth.service.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 
 const router = Router();
@@ -19,84 +19,6 @@ router.get('/me', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/user/generate-key — Generate a new API key (returns full key)
-router.post('/generate-key', requireAuth, async (req, res) => {
-  const userId = req.user!.id;
-
-  const apiKey = generateApiKey();
-  try {
-    const supportsKeyHash = await usersHasColumn('user_key_hash');
-    await db.update('users', userId, supportsKeyHash
-      ? { user_key: maskApiKey(apiKey), user_key_hash: hashApiKey(apiKey) }
-      : { user_key: apiKey }
-    );
-    res.json({ success: true, api_key: apiKey, user_key_preview: maskApiKey(apiKey) });
-  } catch (error: any) {
-    console.error('Generate key error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to generate API key' });
-  }
-});
-
-// GET /api/user/reveal-key — Reveal full API key (protected)
-router.get('/reveal-key', requireAuth, async (req, res) => {
-  const userId = req.user!.id;
-
-  try {
-    const user = await db.findById('users', userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    let fullKey = String(user.user_key || '').trim();
-    let regenerated = false;
-
-    // Hashed keys cannot be revealed. Generate a new full key and show it once.
-    const supportsKeyHash = await usersHasColumn('user_key_hash');
-    if ((supportsKeyHash && (user as any).user_key_hash) || !isLikelyUserApiKey(fullKey)) {
-      fullKey = generateApiKey();
-      regenerated = true;
-      await db.update('users', user.id, supportsKeyHash
-        ? { user_key: maskApiKey(fullKey), user_key_hash: hashApiKey(fullKey) }
-        : { user_key: fullKey }
-      );
-    }
-
-    res.json({ user_key: fullKey, user_key_preview: maskApiKey(fullKey), regenerated });
-  } catch (error: any) {
-    console.error('Reveal key error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
-
-// DELETE /api/user/revoke-key — Revoke API key (invalidates external access)
-router.delete('/revoke-key', requireAuth, async (req, res) => {
-  try {
-    const userId = req.user!.id;
-    const supportsKeyHash = await usersHasColumn('user_key_hash');
-    await db.update('users', userId, supportsKeyHash
-      ? { user_key: null, user_key_hash: null }
-      : { user_key: null }
-    );
-    res.json({ success: true, message: 'API key revoked. Generate a new one at POST /api/user/generate-key' });
-  } catch (error: any) {
-    console.error('Revoke key error:', error.message);
-    res.status(500).json({ error: 'Failed to revoke API key' });
-  }
-});
-
-// GET /api/user/quota — Get own quota info (protected)
-router.get('/quota', requireAuth, async (req, res) => {
-  try {
-    const user = await db.findById('users', req.user!.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({
-      name: user.email,
-      usage: Number(user.usage_count) || 0,
-      quota: Number(user.quota_limit) || 0,
-      balance: Number(user.balance) || 0
-    });
-  } catch {
-    res.status(500).json({ error: 'Database error' });
-  }
-});
 
 // GET /api/user/usage-history — Owner usage logs for internal/partner keys
 router.get('/usage-history', requireAuth, async (req, res) => {

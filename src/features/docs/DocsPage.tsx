@@ -27,9 +27,12 @@ export default function DocsPage() {
 
     return {
       health: `curl -s ${baseUrl}/api/health`,
-      models: `curl -s ${baseUrl}/v1/models \\\n  -H "${keyHeader}: ${keyPlaceholder}"`,
-      providers: `curl -s ${baseUrl}/v1/providers \\\n  -H "${keyHeader}: ${keyPlaceholder}"`,
-      chat: `curl -s -X POST ${baseUrl}/v1/chat/completions \\\n  -H "${keyHeader}: ${keyPlaceholder}" \\\n  -H "Content-Type: application/json" \\\n  -d '${chatBody}'`,
+      models: `curl -s ${baseUrl}/v1/models \\
+  -H "${keyHeader}: ${keyPlaceholder}"`,
+      chat: `curl -s -X POST ${baseUrl}/v1/chat/completions \\
+  -H "${keyHeader}: ${keyPlaceholder}" \\
+  -H "Content-Type: application/json" \\
+  -d '${chatBody}'`,
       js: `const res = await fetch('${baseUrl}/v1/chat/completions', {\n  method: 'POST',\n  headers: {\n    '${keyHeader}': '${keyPlaceholder}',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify(${chatBody})\n});\n\nconst data = await res.json();\nconsole.log(data.choices[0].message.content);`,
       node: `import OpenAI from 'openai';\n\nconst client = new OpenAI({\n  baseURL: '${baseUrl}/v1',\n  ${'api' + 'Key'}: '${keyPlaceholder}',\n});\n\nconst res = await client.chat.completions.create(${chatBody});\nconsole.log(res.choices[0].message.content);`,
       python: `from openai import OpenAI\n\nclient = OpenAI(\n    base_url='${baseUrl}/v1',\n    api_key='${keyPlaceholder}',\n)\n\nres = client.chat.completions.create(**${pyBody})\nprint(res.choices[0].message.content)`,
@@ -52,7 +55,7 @@ export default function DocsPage() {
   return <div className="h-full overflow-y-auto"><div className="max-w-6xl mx-auto p-6 space-y-6 animate-fade-in">
     <header>
       <h1 className="text-2xl font-bold text-[var(--color-text)]">API Documentation</h1>
-      <p className="text-sm text-[var(--color-text-muted)] mt-1">Endpoint Kroma Gateway untuk sync provider dan test chat AI.</p>
+      <p className="text-sm text-[var(--color-text-muted)] mt-1">Endpoint Kroma Gateway untuk sync model dan test chat AI.</p>
     </header>
 
     <DocsContent gatewayKey={gatewayKey} setGatewayKey={setGatewayKey} body={body} setBody={setBody} test={test} run={run} partnerFetch={partnerFetch} examples={examples} />
@@ -66,28 +69,27 @@ export default function DocsPage() {
   </div></div>;
 }
 
-type PartnerTest = 'health' | 'models' | 'providers' | 'chat';
+type PartnerTest = 'health' | 'models' | 'chat';
 
 function compactResponse(label: string, raw: string) {
   try {
     const data = JSON.parse(raw);
     if (data.error) return JSON.stringify({ error: data.error.message, code: data.error.code, details: data.error.details }, null, 2);
     if (label === 'Health') return JSON.stringify({ status: data.status, uptime: data.uptime }, null, 2);
-    if (label === 'Providers') return JSON.stringify({ providers: (data.data || []).map((p: any) => ({ id: p.id, name: p.name, status: p.status, error: p.error, models: p.models })) }, null, 2);
+    if (label === 'Models') return JSON.stringify({ models: (data.data || []).map((m: any) => ({ id: m.id, provider: m.owned_by, status: m.status, error: m.error })) }, null, 2);
     if (label === 'Chat') return JSON.stringify({ content: data.choices?.[0]?.message?.content || '', model: data.model }, null, 2);
     return JSON.stringify(data, null, 2);
   } catch { return raw; }
 }
 
 function DocsContent({ gatewayKey, setGatewayKey, body, setBody, test, run, partnerFetch, examples }: { gatewayKey: string; setGatewayKey: (v: string) => void; body: string; setBody: (v: string) => void; test: TestState; run: any; partnerFetch: any; examples: Record<string, string> }) {
-  const [selected, setSelected] = useState<PartnerTest>('providers');
+  const [selected, setSelected] = useState<PartnerTest>('models');
   const runSelected = () => {
     if (selected !== 'health' && !gatewayKey.trim()) {
-      return run('Validasi Kroma API key', async () => ({ status: 400, text: async () => JSON.stringify({ error: { message: 'Kroma API key kg_ wajib diisi untuk test Providers/Chat. Ini bukan API key provider/OpenAI/Ollama.', code: 'VALIDATION_ERROR' } }, null, 2) }));
+      return run('Validasi Kroma API key', async () => ({ status: 400, text: async () => JSON.stringify({ error: { message: 'Kroma API key kg_ wajib diisi untuk test Models/Chat. Ini bukan API key model/OpenAI/Ollama.', code: 'VALIDATION_ERROR' } }, null, 2) }));
     }
     if (selected === 'health') return run('Health', () => fetch('/api/health'));
     if (selected === 'models') return run('Models', () => partnerFetch('/v1/models'));
-    if (selected === 'providers') return run('Providers', () => partnerFetch('/v1/providers'));
     return run('Chat', async () => {
       let payload: any;
       try {
@@ -96,10 +98,10 @@ function DocsContent({ gatewayKey, setGatewayKey, body, setBody, test, run, part
         return { status: 400, text: async () => JSON.stringify({ error: { message: 'Body JSON tidak valid.', code: 'VALIDATION_ERROR' } }) };
       }
 
-      // ponytail: docs tester only; for real apps, choose the model explicitly from /v1/providers.
+      // ponytail: docs tester only; for real apps, choose the model explicitly from /v1/models.
       if (!payload.model || payload.model === 'openai/gpt-4o-mini') {
-        const providers = await partnerFetch('/v1/providers').then((r: Response) => r.json()).catch(() => null);
-        const firstModel = providers?.data?.flatMap((p: any) => p.models || [])?.[0];
+        const models = await partnerFetch('/v1/models').then((r: Response) => r.json()).catch(() => null);
+        const firstModel = models?.data?.[0]?.id;
         if (firstModel) payload.model = firstModel;
       }
 
@@ -113,18 +115,17 @@ function DocsContent({ gatewayKey, setGatewayKey, body, setBody, test, run, part
 
   return <div className="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,.95fr)] gap-6 items-start">
     <div className="space-y-6">
-      <Card title="Gateway flow"><p className="text-sm text-[var(--color-text)]">client/backend → Kroma /v1 → provider AI</p><p className="text-sm text-amber-500 mt-2">API key di tester ini adalah <b>Kroma API key</b> yang prefix-nya <code>kg_</code>, bukan API key provider seperti OpenAI/Ollama. Simpan di backend, jangan expose di frontend publik.</p></Card>
-      <Card title="Endpoints"><Endpoint method="GET" path="/api/health" desc="Cek server hidup." /><Endpoint method="GET" path="/v1" desc="Info gateway + model registered." /><Endpoint method="GET" path="/v1/models" desc="OpenAI-compatible model list untuk Copilot/OpenAI SDK." /><Endpoint method="GET" path="/v1/providers" desc="List provider + model untuk sync web eksternal." /><Endpoint method="POST" path="/v1/chat/completions" desc="Chat OpenAI-compatible, support stream true." /></Card>
-      <Card title="Examples"><Snippet title="Health" code={examples.health} /><Snippet title="Models" code={examples.models} /><Snippet title="Providers" code={examples.providers} /><Snippet title="Chat" code={examples.chat} /><Snippet title="JavaScript fetch" code={examples.js} /><Snippet title="Node OpenAI SDK" code={examples.node} /><Snippet title="Python OpenAI SDK" code={examples.python} /></Card>
+      <Card title="Gateway flow"><p className="text-sm text-[var(--color-text)]">client/backend → Kroma /v1 → model AI</p><p className="text-sm text-amber-500 mt-2">API key di tester ini adalah <b>Kroma API key</b> yang prefix-nya <code>kg_</code>, bukan API key model seperti OpenAI/Ollama. Simpan di backend, jangan expose di frontend publik.</p></Card>
+      <Card title="Endpoints"><Endpoint method="GET" path="/api/health" desc="Cek server hidup." /><Endpoint method="GET" path="/v1" desc="Info gateway + model registered." /><Endpoint method="GET" path="/v1/models" desc="List model OpenAI-compatible + status on/error untuk Copilot, OpenAI SDK, dan sync web eksternal." /><Endpoint method="POST" path="/v1/chat/completions" desc="Chat OpenAI-compatible, support stream true." /></Card>
+      <Card title="Examples"><Snippet title="Health" code={examples.health} /><Snippet title="Models" code={examples.models} /><Snippet title="Chat" code={examples.chat} /><Snippet title="JavaScript fetch" code={examples.js} /><Snippet title="Node OpenAI SDK" code={examples.node} /><Snippet title="Python OpenAI SDK" code={examples.python} /></Card>
     </div>
     <Card title="Live tester" sticky>
       <TestStatus test={test} />
       <label className="block mt-4 text-xs text-[var(--color-text-muted)]">Pilih test</label>
       <select value={selected} onChange={e => setSelected(e.target.value as PartnerTest)} className="w-full mt-1 px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-sm">
         <option value="health">Health — server hidup</option>
-        <option value="models">Models — OpenAI-compatible untuk Copilot/OpenAI SDK</option>
-        <option value="providers">Providers — sync provider + model untuk KroomBridge</option>
-        <option value="chat">Chat — test request ke provider</option>
+        <option value="models">Models — list model + status</option>
+        <option value="chat">Chat — test request ke model</option>
       </select>
       <input value={gatewayKey} onChange={e => setGatewayKey(e.target.value)} placeholder="Paste Kroma API key manual: kg_xxx" className="w-full mt-3 px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-mono" />
       {selected === 'chat' && <textarea value={body} onChange={e => setBody(e.target.value)} rows={10} className="w-full mt-3 px-3 py-2 rounded border border-[var(--color-border)] bg-[var(--color-code-bg)] text-sm font-mono" />}

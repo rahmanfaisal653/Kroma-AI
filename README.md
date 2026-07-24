@@ -1,22 +1,19 @@
 # Kroma AI Gateway
 
-Fullstack AI gateway untuk mengelola akses model AI, billing kredit, admin API catalog, dan fitur RAG/knowledge base.
+Fullstack AI gateway untuk mengelola akses model AI, billing kredit, admin API catalog.
 
 ## Fitur Utama
 
 - AI Gateway dengan autentikasi JWT atau API key eksternal.
 - Catalog API/model publik, konfigurasi upstream hanya untuk admin.
 - Billing kredit, transaksi, quota, dan usage tracking per user.
-- Admin dashboard untuk users, APIs, plans, docs, payment methods, dan transactions.
-- RAG endpoint untuk chat berbasis knowledge, generate dari URL, dan ingest dokumen.
 - Kroombase REST sebagai database remote.
 
 ## Stack
 
 - Frontend: React 19, Vite, TypeScript, Zustand.
 - Backend: Express, TypeScript, Helmet, CORS, JWT, bcrypt.
-- RAG: Ollama embeddings/chat, ChromaDB vector store, scraper HTML.
-- Database: Kroombase REST API.
+- Database: MySQL.
 
 ## Menjalankan Project
 
@@ -44,7 +41,7 @@ Variabel penting:
 - `KROOMBASE_API_KEY` - API key Kroombase.
 - `JWT_SECRET` dan `JWT_REFRESH_SECRET` - secret token auth.
 - `FRONTEND_URL` - origin frontend untuk CORS production.
-- `OLLAMA_BASE_URL`, `OLLAMA_EMBED_MODEL`, `OLLAMA_CHAT_MODEL` - konfigurasi RAG.
+- `OLLAMA_BASE_URL`, `OLLAMA_EMBED_MODEL`, `OLLAMA_CHAT_MODEL` - konfigurasi .
 - `CHROMA_URL` dan `CHROMA_COLLECTION` - konfigurasi vector store.
 - `DEV_BOOTSTRAP_TOKEN` - token untuk endpoint test/dev saja.
 - `ALLOW_PRIVATE_GATEWAY_TARGETS=true` - hanya jika gateway memang perlu proxy ke host private/internal.
@@ -56,7 +53,6 @@ Variabel penting:
 - `GET /api/user/me`, `GET /api/user/quota`, `GET /api/user/reveal-key` - user profile/key/quota.
 - `GET /api/apis`, `GET /api/plans`, `GET /api/docs` - public catalog.
 - `GET/POST/PUT/DELETE /api/admin/*` - admin management.
-- `POST /api/chat`, `POST /api/rag/generate`, `POST /api/rag/ingest` - RAG.
 - Dynamic gateway endpoints mengikuti `endpoint` yang dikonfigurasi di tabel `apis`.
 
 ## Testing

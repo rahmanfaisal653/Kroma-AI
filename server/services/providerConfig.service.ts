@@ -3,7 +3,7 @@ import { getProvider, getProviders, type ProviderConfig, type ProviderId } from 
 
 const TABLE = 'docs';
 const CATEGORY = 'provider_config';
-const FIXED_IDS = ['openai', 'ollama', 'lmstudio'] as const;
+const FIXED_IDS = ['openai', 'ollama', 'lmstudio', 'opencode-go', 'commandcode-go'] as const;
 
 type Audience = 'internal' | 'partner';
 type Input = { id?: string; name?: string; baseUrl?: string; token?: string; enabled?: boolean; visibility?: Audience[] | string };

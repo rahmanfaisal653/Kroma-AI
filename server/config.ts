@@ -15,9 +15,6 @@ export const config = {
   port: Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 20202,
   nodeEnv: process.env.NODE_ENV || 'development',
   corsOrigin: String(process.env.CORS_ORIGIN || '').trim(),
-  internalGatewayMode: /^(1|true|yes|on)$/i.test(String(process.env.INTERNAL_GATEWAY_MODE || '')),
-  billingEnabled: /^(1|true|yes|on)$/i.test(String(process.env.BILLING_ENABLED || '')),
-
   // Database (local MySQL by default)
   dbProvider: String(process.env.DB_PROVIDER || 'mysql').trim().toLowerCase(),
   mysqlHost: process.env.MYSQL_HOST || '127.0.0.1',
@@ -31,10 +28,6 @@ export const config = {
   kroombaseApiKey: process.env.KROOMBASE_API_KEY || '',
   dbTimeoutMs: Number(process.env.DB_TIMEOUT_MS) > 0 ? Number(process.env.DB_TIMEOUT_MS) : 15000,
   healthTimeoutMs: Number(process.env.HEALTH_TIMEOUT_MS) > 0 ? Number(process.env.HEALTH_TIMEOUT_MS) : 3000,
-
-  // Optional dependencies
-  chromaDbUrl: String(process.env.CHROMADB_URL || '').trim().replace(/\/+$/, ''),
-  mongodbUri: String(process.env.MONGODB_URI || process.env.MONGO_URI || '').trim(),
 
   // Admin
   adminKey: process.env.ADMIN_KEY || '',
@@ -53,28 +46,9 @@ export const config = {
 
   // Gateway
   defaultTimeoutMs: Number(process.env.DEFAULT_TIMEOUT_MS) > 0 ? Number(process.env.DEFAULT_TIMEOUT_MS) : 600000,
-  defaultStreamTimeoutMs: Number(process.env.DEFAULT_STREAM_TIMEOUT_MS) > 0 ? Number(process.env.DEFAULT_STREAM_TIMEOUT_MS) : 180000,
-  gatewayRetryMax: Number(process.env.GATEWAY_RETRY_MAX) >= 0 ? Number(process.env.GATEWAY_RETRY_MAX) : 1,
-  gatewayRetryBackoffMs: Number(process.env.GATEWAY_RETRY_BACKOFF_MS) > 0 ? Number(process.env.GATEWAY_RETRY_BACKOFF_MS) : 1200,
   apiRateLimitMax: Number(process.env.API_RATE_LIMIT_MAX) > 0 ? Number(process.env.API_RATE_LIMIT_MAX) : 200,
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) > 0 ? Number(process.env.AUTH_RATE_LIMIT_MAX) : 10,
   gatewayRateLimitMax: Number(process.env.GATEWAY_RATE_LIMIT_MAX) > 0 ? Number(process.env.GATEWAY_RATE_LIMIT_MAX) : 30,
-  gatewayMaxMessages: Number(process.env.GATEWAY_MAX_MESSAGES) > 0 ? Number(process.env.GATEWAY_MAX_MESSAGES) : 16,
-  allowPrivateGatewayTargets: /^(1|true|yes|on)$/i.test(String(process.env.ALLOW_PRIVATE_GATEWAY_TARGETS || '')),
-
-  // RAG
-  ragEnabled: /^(1|true|yes|on)$/i.test(String(process.env.RAG_ENABLED || '')),
-  ollamaUrl: String(process.env.OLLAMA_URL || '').trim(),
-  scraperApiUrl: String(process.env.SCRAPER_API_URL || process.env.SCRAPLING_API_URL || '').trim(),
-  ragCacheTtlMs: Number(process.env.RAG_CACHE_TTL_MS) > 0 ? Number(process.env.RAG_CACHE_TTL_MS) : 10 * 60 * 1000,
-  allowPrivateScrapeTargets: /^(1|true|yes|on)$/i.test(String(process.env.ALLOW_PRIVATE_SCRAPE_TARGETS || '')),
-
-  // Dynamic API setting columns (expected in apis table)
-  dynamicApiSettingColumns: [
-    'timeout_ms', 'max_input_chars', 'speed_mode',
-    'default_top_p', 'default_top_k', 'default_temperature',
-    'max_tokens', 'is_streaming', 'model_slug'
-  ] as const,
 } as const;
 
 export type Config = typeof config;

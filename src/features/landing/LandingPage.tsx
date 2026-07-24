@@ -33,7 +33,7 @@ export default function LandingPage() {
       <section className="mx-auto max-w-6xl px-5 py-16">
         <div className="rounded border border-slate-800 bg-slate-900 p-6">
           <p className="font-mono text-xs uppercase tracking-widest text-slate-500">Design intent</p>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">Technical, precise, secure, and boring by design. Kroma focuses on operational control for AI traffic: provider status, API keys, usage logs, and optional Chroma-backed RAG.</p>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">Technical, precise, secure, and boring by design. Kroma focuses on operational control for AI traffic: provider status, API keys, and usage logs.</p>
         </div>
       </section>
     </main>

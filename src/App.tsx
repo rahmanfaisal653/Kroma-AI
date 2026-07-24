@@ -14,7 +14,6 @@ const ModelsPage = lazy(() => import('./features/models/ModelsPage'));
 const KeysPage = lazy(() => import('./features/keys/KeysPage'));
 const UsagePage = lazy(() => import('./features/usage/UsagePage'));
 const DocsPage = lazy(() => import('./features/docs/DocsPage'));
-const KnowledgePage = lazy(() => import('./features/knowledge/KnowledgePage'));
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'));
 const LoginPage = lazy(() => import('./features/auth/LoginPage'));
 const LandingPage = lazy(() => import('./features/landing/LandingPage'));
@@ -56,7 +55,6 @@ function AppRoutes() {
         
         {/* Auth (public) */}
         <Route path="/login" element={isAuthenticated ? <Navigate to="/home" replace /> : <LoginPage />} />
-        <Route path="/register" element={<Navigate to="/login" replace />} />
 
         {/* User routes — sidebar layout */}
         <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -65,7 +63,6 @@ function AppRoutes() {
           <Route path="models" element={<ModelsPage />} />
           <Route path="keys" element={<KeysPage />} />
           <Route path="usage" element={<UsagePage />} />
-          <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
