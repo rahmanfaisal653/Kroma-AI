@@ -41,9 +41,10 @@ export async function getProviderConfig(id: string): Promise<StoredProvider | nu
   const rows = await providerRows();
   const row = rows.find((item: any) => item.slug === slug(clean));
   const override = parse(row);
-  if (override.deleted) return null;
+  const isFixed = FIXED_IDS.includes(clean as any);
+  if (override.deleted && !isFixed) return null;
 
-  if (FIXED_IDS.includes(clean as any)) {
+  if (isFixed) {
     const base = getProvider(clean as ProviderId);
     const apiKey = override.token ?? base.apiKey;
     return {
@@ -139,7 +140,7 @@ export async function deleteProviderConfig(id: string) {
     return;
   }
   const base = getProvider(clean as ProviderId);
-  const content = JSON.stringify({ name: base.name, baseUrl: base.baseUrl, token: base.apiKey || '', enabled: false, visibility: 'internal', chatPath: base.chatPath || '/chat/completions', modelsPath: base.modelsPath || '/models', deleted: true });
+  const content = JSON.stringify({ name: base.name, baseUrl: base.baseUrl, token: base.apiKey || '', enabled: false, visibility: 'internal', chatPath: base.chatPath || '/chat/completions', modelsPath: base.modelsPath || '/models' });
   if (row) await db.update(TABLE, row.id, { title: base.name, content, published: true });
   else await db.create(TABLE, { title: base.name, slug: slug(clean), category: CATEGORY, content, published: true });
 }
