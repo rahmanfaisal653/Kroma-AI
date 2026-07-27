@@ -8,6 +8,7 @@ export type ProviderConfig = {
   apiKey?: string;
   chatPath?: string;
   modelsPath?: string;
+  kind?: 'free' | 'special' | 'custom';
 };
 
 export type ProviderId = string;

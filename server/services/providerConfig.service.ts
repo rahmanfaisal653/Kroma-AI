@@ -8,7 +8,7 @@ const FIXED_IDS = Object.keys(getProviders());
 type Audience = 'internal' | 'partner';
 type Input = { id?: string; name?: string; baseUrl?: string; token?: string; enabled?: boolean; visibility?: Audience[] | string; chatPath?: string; modelsPath?: string };
 type ModelCheck = Record<string, { status: 'on' | 'off'; error?: string; checked_at: string }>;
-type StoredProvider = ProviderConfig & { overridden?: boolean; custom?: boolean; configured: boolean; enabled: boolean; visibility: Audience[]; model_checks?: ModelCheck };
+type StoredProvider = ProviderConfig & { kind?: 'free' | 'special' | 'custom'; overridden?: boolean; custom?: boolean; configured: boolean; enabled: boolean; visibility: Audience[]; model_checks?: ModelCheck };
 
 function cleanUrl(value = '') {
   return value
@@ -27,7 +27,7 @@ function cleanVisibility(value?: Audience[] | string): Audience[] {
 }
 function safeProvider(provider: StoredProvider) {
   const { apiKey, ...safe } = provider;
-  return { ...safe, configured: Boolean(apiKey), enabled: provider.enabled !== false, visibility: cleanVisibility(provider.visibility), chatPath: provider.chatPath || '/chat/completions', modelsPath: provider.modelsPath || '/models', model_checks: provider.model_checks || {} };
+  return { ...safe, kind: provider.kind || (provider.custom ? 'custom' : 'free'), configured: Boolean(apiKey), enabled: provider.enabled !== false, visibility: cleanVisibility(provider.visibility), chatPath: provider.chatPath || '/chat/completions', modelsPath: provider.modelsPath || '/models', model_checks: provider.model_checks || {} };
 }
 
 export function fixedProviderIds() { return [...FIXED_IDS]; }
@@ -58,6 +58,7 @@ export async function getProviderConfig(id: string): Promise<StoredProvider | nu
       chatPath: override.chatPath || base.chatPath || '/chat/completions',
       modelsPath: override.modelsPath || base.modelsPath || '/models',
       model_checks: override.model_checks || {},
+      kind: base.kind || 'free',
       overridden: Boolean(row),
       custom: false,
     };
@@ -73,6 +74,7 @@ export async function getProviderConfig(id: string): Promise<StoredProvider | nu
     configured: Boolean(apiKey),
     enabled: override.enabled !== false,
     visibility: cleanVisibility(override.visibility),
+    kind: 'custom',
     overridden: true,
     custom: true,
   } as StoredProvider;

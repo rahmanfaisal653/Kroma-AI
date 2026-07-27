@@ -15,4 +15,4 @@ export const FREE_PROVIDERS: ProviderConfig[] = [
   { id: 'sambanova', name: 'SambaNova', baseUrl: 'https://api.sambanova.ai/v1' },
   { id: 'hyperbolic', name: 'Hyperbolic', baseUrl: 'https://api.hyperbolic.xyz/v1' },
   { id: 'together', name: 'Together AI', baseUrl: 'https://api.together.xyz/v1' },
-].map(provider => ({ ...provider, chatPath: '/chat/completions', modelsPath: '/models' }));
+].map(provider => ({ ...provider, chatPath: '/chat/completions', modelsPath: '/models', kind: 'free' as const }));

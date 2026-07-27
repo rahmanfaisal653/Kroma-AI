@@ -1,5 +1,5 @@
 // Icon provider: LobeHub (https://icons.lobehub.com) buat yang tersedia,
-// robot.png lokal buat custom provider, pc-putih/hitam, dan provider tanpa icon LobeHub.
+// robot.png lokal buat custom provider dan provider tanpa icon LobeHub.
 export const ROBOT_ICON = '/brand/robot.png';
 
 // Provider id → slug LobeHub (kalau sama dengan id, tak perlu masuk sini).

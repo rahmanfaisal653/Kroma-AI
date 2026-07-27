@@ -9,10 +9,13 @@ import { providerIconUrl, ROBOT_ICON } from './providerIcons';
 import { useThemeStore } from '../../stores/theme.store';
 
 type Visibility = 'internal' | 'partner';
+type ProviderKind = 'free' | 'special' | 'custom';
 type ProviderStatus = {
   id: string;
   name: string;
   baseUrl: string;
+  kind?: ProviderKind;
+  custom?: boolean;
   configured?: boolean;
   enabled?: boolean;
   status?: string;
@@ -25,7 +28,7 @@ const toggleVisibility = (current: Visibility[], value: Visibility) => {
   const next = current.includes(value) ? current.filter(item => item !== value) : [...current, value];
   return next.length ? next : current;
 };
-
+const providerKind = (p: ProviderStatus): ProviderKind => p.kind || (p.custom ? 'custom' : 'free');
 const statusStyles = (p: ProviderStatus) => {
   if (p.enabled === false) return 'border-slate-500/40 bg-slate-500/10 text-slate-400';
   if (p.status === 'on') return 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400';
@@ -61,14 +64,18 @@ export default function ModelsPage() {
     setForm(null); await load(); toast.success('Provider saved');
   };
 
+  const freeProviders = providers.filter(p => providerKind(p) === 'free');
+  const specialProviders = providers.filter(p => providerKind(p) === 'special');
+  const customProviders = providers.filter(p => providerKind(p) === 'custom');
+
   return <div className="h-full overflow-y-auto"><div className="max-w-6xl mx-auto p-6 space-y-6 animate-fade-in">
     <div className="flex items-start justify-between gap-3">
-      <div><h1 className="text-xl font-bold text-[var(--color-text)]">Providers</h1><p className="text-sm text-[var(--color-text-muted)] mt-0.5">Klik provider untuk edit, hapus, test model, dan atur akses.</p></div>
-      <div className="flex gap-2"><Button variant="outline" loading={loading} icon={<RefreshCw size={14} />} onClick={load}>Test All</Button><Button icon={<Plus size={14} />} onClick={() => setForm(emptyForm)}>Add Provider</Button></div>
+      <div><h1 className="text-xl font-bold text-[var(--color-text)]">Providers</h1><p className="text-sm text-[var(--color-text-muted)] mt-0.5">Free provider bawaan selalu muncul setelah update. Special pakai adapter. Custom kamu tambah manual.</p></div>
+      <div className="flex gap-2"><Button variant="outline" loading={loading} icon={<RefreshCw size={14} />} onClick={load}>Refresh</Button><Button icon={<Plus size={14} />} onClick={() => setForm(emptyForm)}>Add Custom</Button></div>
     </div>
 
     {form && <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-10 backdrop-blur-sm"><div className="w-full max-w-2xl rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 space-y-3 shadow-xl">
-      <h2 className="font-semibold text-[var(--color-text)]">Add Provider</h2>
+      <h2 className="font-semibold text-[var(--color-text)]">Add Custom Provider</h2>
       <div className="grid md:grid-cols-2 gap-3">
         <Input label="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Groq" />
         <Input label="Prefix" value={form.id} onChange={e => setForm({ ...form, id: e.target.value })} placeholder="groq" hint="Dipakai sebagai model prefix: groq/namamodel" />
@@ -86,23 +93,39 @@ export default function ModelsPage() {
       <div className="flex gap-2"><Button icon={<Save size={14} />} onClick={save}>Save</Button><Button variant="outline" onClick={() => setForm(null)}>Cancel</Button></div>
     </div></div>}
 
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-      {providers.map(p => <Link key={p.id} to={`/models/${p.id}`} className="kroma-card-hover group rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 backdrop-blur-xl transition hover:border-[var(--color-primary)]/50">
-        <div className="flex items-center gap-3">
-          <img src={providerIconUrl(p.id, theme === 'dark' ? 'dark' : 'light')} alt="" className="w-8 h-8 rounded shrink-0" loading="lazy" onError={e => { const img = e.target as HTMLImageElement; if (!img.src.endsWith(ROBOT_ICON)) img.src = ROBOT_ICON; }} />
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold text-sm text-[var(--color-text)] truncate">{p.name || p.id}</p>
-            <p className="text-[11px] text-[var(--color-text-muted)] truncate">{p.id}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded border ${statusStyles(p)}`}>{statusLabel(p)}</span>
-          <span className="text-[10px] text-[var(--color-text-muted)]">{p.configured ? 'key set' : 'no key'}</span>
-        </div>
-      </Link>)}
-      {!loading && !providers.length && <p className="col-span-full text-sm text-[var(--color-text-muted)]">Belum ada provider.</p>}
-    </div>
+    <ProviderSection title="Free Providers" desc="OpenAI-compatible bawaan. Tinggal isi API key." providers={freeProviders} theme={theme} loading={loading} />
+    <ProviderSection title="Special Providers" desc="Provider non-OpenAI-compatible yang butuh adapter khusus." providers={specialProviders} theme={theme} loading={loading} />
+    <ProviderSection title="Custom Providers" desc="Provider manual dari dashboard. Bisa kamu hapus/edit sendiri." providers={customProviders} theme={theme} loading={loading} empty="Belum ada custom provider." />
   </div></div>;
+}
+
+function ProviderSection({ title, desc, providers, theme, loading, empty = 'Belum ada provider.' }: { title: string; desc: string; providers: ProviderStatus[]; theme: 'light' | 'dark'; loading: boolean; empty?: string }) {
+  return <section className="space-y-3">
+    <div className="flex items-end justify-between gap-3 border-b border-[var(--color-border)] pb-2">
+      <div><h2 className="text-sm font-semibold text-[var(--color-text)]">{title}</h2><p className="text-xs text-[var(--color-text-muted)]">{desc}</p></div>
+      <span className="font-mono text-xs text-[var(--color-text-muted)]">{providers.length}</span>
+    </div>
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      {providers.map(p => <ProviderCard key={p.id} provider={p} theme={theme} />)}
+      {!loading && !providers.length && <p className="col-span-full text-sm text-[var(--color-text-muted)]">{empty}</p>}
+    </div>
+  </section>;
+}
+
+function ProviderCard({ provider: p, theme }: { provider: ProviderStatus; theme: 'light' | 'dark' }) {
+  return <Link to={`/models/${p.id}`} className="kroma-card-hover group rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 backdrop-blur-xl transition hover:border-[var(--color-primary)]/50">
+    <div className="flex items-center gap-3">
+      <img src={providerIconUrl(p.id, theme)} alt="" className="w-8 h-8 rounded shrink-0" loading="lazy" onError={e => { const img = e.target as HTMLImageElement; if (!img.src.endsWith(ROBOT_ICON)) img.src = ROBOT_ICON; }} />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-sm text-[var(--color-text)] truncate">{p.name || p.id}</p>
+        <p className="text-[11px] text-[var(--color-text-muted)] truncate">{p.id}</p>
+      </div>
+    </div>
+    <div className="mt-3 flex items-center justify-between">
+      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded border ${statusStyles(p)}`}>{statusLabel(p)}</span>
+      <span className="text-[10px] text-[var(--color-text-muted)]">{p.configured ? 'key set' : 'no key'}</span>
+    </div>
+  </Link>;
 }
 
 function Toggle({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {

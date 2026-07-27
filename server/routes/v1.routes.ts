@@ -89,8 +89,8 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
   const started = Date.now();
   const modelId = String(req.body?.model || '').trim();
   let messages = req.body?.messages;
-  if (!modelId) { await logGatewayFailure(req, '-', 400, 'model is required', started); return apiError(res, 400, 'VALIDATION_ERROR', 'model is required', { example: 'pchitam/llama3:latest' }); }
-  if (!modelId.includes('/')) { await logGatewayFailure(req, modelId, 400, 'model must use provider prefix', started); return apiError(res, 400, 'VALIDATION_ERROR', 'model must use provider prefix: prefix/model-name', { received: modelId, example: 'token-router/provider-model-name' }); }
+  if (!modelId) { await logGatewayFailure(req, '-', 400, 'model is required', started); return apiError(res, 400, 'VALIDATION_ERROR', 'model is required', { example: 'groq/llama-3.3-70b-versatile' }); }
+  if (!modelId.includes('/')) { await logGatewayFailure(req, modelId, 400, 'model must use provider prefix', started); return apiError(res, 400, 'VALIDATION_ERROR', 'model must use provider prefix: prefix/model-name', { received: modelId, example: 'groq/provider-model-name' }); }
   if (!Array.isArray(messages)) { await logGatewayFailure(req, modelId, 400, 'messages must be an array', started); return apiError(res, 400, 'VALIDATION_ERROR', 'messages must be an array', { example: [{ role: 'user', content: 'Halo' }] }); }
 
   const prefix = modelId.includes('/') ? modelId.split('/')[0] : '';
