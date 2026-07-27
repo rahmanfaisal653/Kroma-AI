@@ -1,46 +1,44 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Edit2, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { Plus, RefreshCw, Save } from 'lucide-react';
 import { providerStatusApi } from '../../services/api';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { toast } from '../../ui/Toast';
+import { providerIconUrl, ROBOT_ICON } from './providerIcons';
+import { useThemeStore } from '../../stores/theme.store';
 
 type Visibility = 'internal' | 'partner';
 type ProviderStatus = {
   id: string;
   name: string;
   baseUrl: string;
-  chatPath?: string;
-  modelsPath?: string;
   configured?: boolean;
   enabled?: boolean;
-  visibility?: Visibility[];
-  overridden?: boolean;
-  custom?: boolean;
   status?: string;
-  error?: string;
-  models?: string[];
-  model_checks?: Record<string, { status: 'on' | 'off'; error?: string; checked_at?: string }>;
 };
-type Form = { id: string; originalId?: string; name: string; baseUrl: string; secret: string; chatPath: string; modelsPath: string; enabled: boolean; visibility: Visibility[]; mode: 'create' | 'edit' };
+type Form = { id: string; name: string; baseUrl: string; secret: string; chatPath: string; modelsPath: string; enabled: boolean; visibility: Visibility[] };
 
-const emptyForm: Form = { id: '', name: '', baseUrl: '', secret: '', chatPath: '/chat/completions', modelsPath: '/models', enabled: true, visibility: ['internal'], mode: 'create' };
+const emptyForm: Form = { id: '', name: '', baseUrl: '', secret: '', chatPath: '/chat/completions', modelsPath: '/models', enabled: true, visibility: ['internal'] };
 const visibilityLabels: Record<Visibility, string> = { internal: 'Internal', partner: 'Partner' };
-const cleanVisibility = (value?: Visibility[] | string): Visibility[] => {
-  const raw = Array.isArray(value) ? value : value === 'both' ? ['internal', 'partner'] : value ? [value] : ['internal'];
-  const picked = raw.filter((item): item is Visibility => item === 'internal' || item === 'partner');
-  return picked.length ? [...new Set(picked)] : ['internal'];
-};
 const toggleVisibility = (current: Visibility[], value: Visibility) => {
   const next = current.includes(value) ? current.filter(item => item !== value) : [...current, value];
   return next.length ? next : current;
 };
 
+const statusStyles = (p: ProviderStatus) => {
+  if (p.enabled === false) return 'border-slate-500/40 bg-slate-500/10 text-slate-400';
+  if (p.status === 'on') return 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400';
+  if (p.status === 'not_configured') return 'border-amber-500/40 bg-amber-500/15 text-amber-400';
+  return 'border-red-500/40 bg-red-500/15 text-red-400';
+};
+const statusLabel = (p: ProviderStatus) => p.enabled === false ? 'disabled' : p.status || 'unknown';
+
 export default function ModelsPage() {
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
   const [form, setForm] = useState<Form | null>(null);
   const [loading, setLoading] = useState(true);
+  const theme = useThemeStore(state => state.theme);
 
   const load = async () => {
     setLoading(true);
@@ -54,64 +52,23 @@ export default function ModelsPage() {
     if (!form?.name.trim()) return toast.error('Nama wajib diisi');
     if (!form.id.trim()) return toast.error('Prefix wajib diisi');
     if (!form.baseUrl.trim()) return toast.error('URL wajib diisi');
-    const payload = { id: form.id, name: form.name, baseUrl: form.baseUrl, apiKey: form.secret || undefined, enabled: form.enabled, visibility: form.visibility };
-    if (form.mode === 'create') await providerStatusApi.create(payload);
-    else if (form.originalId && form.id !== form.originalId) { await providerStatusApi.create(payload); await providerStatusApi.reset(form.originalId); }
-    else await providerStatusApi.update(form.id, payload);
+    await providerStatusApi.create({
+      id: form.id, name: form.name, baseUrl: form.baseUrl,
+      apiKey: form.secret || undefined,
+      chatPath: form.chatPath, modelsPath: form.modelsPath,
+      enabled: form.enabled, visibility: form.visibility,
+    });
     setForm(null); await load(); toast.success('Provider saved');
   };
 
-  const remove = async (p: ProviderStatus) => {
-    if (!confirm('Hapus provider ini?')) return;
-    await providerStatusApi.reset(p.id); await load(); toast.success('Provider deleted');
-  };
-
-  const edit = (p: ProviderStatus) => setForm({
-    id: p.id,
-    originalId: p.id,
-    name: p.name || p.id,
-    baseUrl: p.baseUrl,
-    secret: '',
-    chatPath: p.chatPath || '/chat/completions',
-    modelsPath: p.modelsPath || '/models',
-    enabled: p.enabled !== false,
-    visibility: cleanVisibility(p.visibility),
-    mode: 'edit',
-  });
-
-  const quickUpdate = async (p: ProviderStatus, patch: Partial<Form>) => {
-    const next = {
-      ...p,
-      enabled: patch.enabled ?? p.enabled !== false,
-      visibility: patch.visibility ?? cleanVisibility(p.visibility),
-    };
-    setProviders(items => items.map(item => item.id === p.id ? next : item));
-    try {
-      await providerStatusApi.update(p.id, {
-        name: p.name || p.id,
-        baseUrl: p.baseUrl,
-        chatPath: p.chatPath || '/chat/completions',
-        modelsPath: p.modelsPath || '/models',
-        enabled: next.enabled,
-        visibility: next.visibility,
-      });
-      toast.success('Provider updated');
-    } catch {
-      toast.error('Gagal update provider');
-      await load();
-    }
-  };
-
-
-
-  return <div className="h-full overflow-y-auto"><div className="max-w-5xl mx-auto p-6 space-y-6 animate-fade-in">
+  return <div className="h-full overflow-y-auto"><div className="max-w-6xl mx-auto p-6 space-y-6 animate-fade-in">
     <div className="flex items-start justify-between gap-3">
-      <div><h1 className="text-xl font-bold text-[var(--color-text)]">Providers</h1><p className="text-sm text-[var(--color-text-muted)] mt-0.5">Tambah provider OpenAI-compatible. Atur status dan akses: internal, partner, atau dua-duanya.</p></div>
+      <div><h1 className="text-xl font-bold text-[var(--color-text)]">Providers</h1><p className="text-sm text-[var(--color-text-muted)] mt-0.5">Klik provider untuk edit, hapus, test model, dan atur akses.</p></div>
       <div className="flex gap-2"><Button variant="outline" loading={loading} icon={<RefreshCw size={14} />} onClick={load}>Test All</Button><Button icon={<Plus size={14} />} onClick={() => setForm(emptyForm)}>Add Provider</Button></div>
     </div>
 
-    {form && <div className="kroma-card-hover rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 space-y-3 backdrop-blur-xl">
-      <h2 className="font-semibold text-[var(--color-text)]">{form.mode === 'create' ? 'Add Provider' : `Edit ${form.name}`}</h2>
+    {form && <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-10 backdrop-blur-sm"><div className="w-full max-w-2xl rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 space-y-3 shadow-xl">
+      <h2 className="font-semibold text-[var(--color-text)]">Add Provider</h2>
       <div className="grid md:grid-cols-2 gap-3">
         <Input label="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Groq" />
         <Input label="Prefix" value={form.id} onChange={e => setForm({ ...form, id: e.target.value })} placeholder="groq" hint="Dipakai sebagai model prefix: groq/namamodel" />
@@ -119,33 +76,31 @@ export default function ModelsPage() {
       <Input label="Base URL" value={form.baseUrl} onChange={e => setForm({ ...form, baseUrl: e.target.value })} placeholder="https://api.groq.com/openai/v1" />
       <Input label="API Key" value={form.secret} onChange={e => setForm({ ...form, secret: e.target.value })} placeholder="Kosongkan kalau provider lokal" />
       <div className="grid md:grid-cols-2 gap-3">
-        <Input label="Models Path" value={form.modelsPath} onChange={e => setForm({ ...form, modelsPath: e.target.value })} placeholder="/models" hint="Kroma fetch baseUrl + modelsPath" />
-        <Input label="Chat Path" value={form.chatPath} onChange={e => setForm({ ...form, chatPath: e.target.value })} placeholder="/chat/completions" hint="Kroma call baseUrl + chatPath" />
+        <Input label="Models Path" value={form.modelsPath} onChange={e => setForm({ ...form, modelsPath: e.target.value })} placeholder="/models" />
+        <Input label="Chat Path" value={form.chatPath} onChange={e => setForm({ ...form, chatPath: e.target.value })} placeholder="/chat/completions" />
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
         <div><p className="text-xs text-[var(--color-text-muted)] mb-1">Status</p><div className="flex gap-2"><Toggle active={form.enabled} onClick={() => setForm({ ...form, enabled: true })}>Enable</Toggle><Toggle active={!form.enabled} onClick={() => setForm({ ...form, enabled: false })}>Disable</Toggle></div></div>
         <div><p className="text-xs text-[var(--color-text-muted)] mb-1">Visibility</p><div className="flex flex-wrap gap-2">{(['internal', 'partner'] as Visibility[]).map(v => <Toggle key={v} active={form.visibility.includes(v)} onClick={() => setForm({ ...form, visibility: toggleVisibility(form.visibility, v) })}>{visibilityLabels[v]}</Toggle>)}</div></div>
       </div>
       <div className="flex gap-2"><Button icon={<Save size={14} />} onClick={save}>Save</Button><Button variant="outline" onClick={() => setForm(null)}>Cancel</Button></div>
-    </div>}
+    </div></div>}
 
-    <div className="grid md:grid-cols-3 gap-4">
-      {providers.map(p => <div key={p.id} className="kroma-card-hover rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 space-y-3 backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-2"><h2 className="font-semibold text-[var(--color-text)]">{p.name || p.id}</h2><span className={`text-[11px] font-semibold uppercase tracking-wide px-2 py-1 rounded border ${p.enabled === false ? 'border-slate-500/40 bg-slate-500/10 text-slate-400' : p.status === 'on' ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400' : p.status === 'not_configured' ? 'border-amber-500/40 bg-amber-500/15 text-amber-400' : 'border-red-500/40 bg-red-500/15 text-red-400'}`}>{p.enabled === false ? 'disabled' : p.status || 'unknown'}</span></div>
-        <p className="text-xs font-mono text-[var(--color-text-muted)] break-all">{p.baseUrl}</p>
-          <p className="text-[11px] font-mono text-[var(--color-text-muted)] break-all mt-1">models: {p.modelsPath || '/models'} · chat: {p.chatPath || '/chat/completions'}</p>
-        <p className="text-xs text-[var(--color-text-muted)]">model: <code>{p.id}/model-name</code></p>
-        <p className="text-xs text-[var(--color-text-muted)]">{p.custom ? 'custom' : p.overridden ? 'custom config' : 'env default'} · key: {p.configured ? 'set' : 'empty'} · visibility: {cleanVisibility(p.visibility).map(v => visibilityLabels[v]).join(', ')}</p>
-        {p.error && <p className="text-xs text-red-400">{p.error}</p>}
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-alt)] p-3 text-xs text-[var(--color-text-muted)]">
-          {p.models?.length || 0} models · open detail page to copy/test one by one.
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      {providers.map(p => <Link key={p.id} to={`/models/${p.id}`} className="kroma-card-hover group rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 backdrop-blur-xl transition hover:border-[var(--color-primary)]/50">
+        <div className="flex items-center gap-3">
+          <img src={providerIconUrl(p.id, theme === 'dark' ? 'dark' : 'light')} alt="" className="w-8 h-8 rounded shrink-0" loading="lazy" onError={e => { const img = e.target as HTMLImageElement; if (!img.src.endsWith(ROBOT_ICON)) img.src = ROBOT_ICON; }} />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-sm text-[var(--color-text)] truncate">{p.name || p.id}</p>
+            <p className="text-[11px] text-[var(--color-text-muted)] truncate">{p.id}</p>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => quickUpdate(p, { enabled: p.enabled === false })}>{p.enabled === false ? 'Enable' : 'Disable'}</Button>
-          {(['internal', 'partner'] as Visibility[]).map(v => <Button key={v} size="sm" variant={cleanVisibility(p.visibility).includes(v) ? 'primary' : 'outline'} onClick={() => quickUpdate(p, { visibility: toggleVisibility(cleanVisibility(p.visibility), v) })}>{visibilityLabels[v]}</Button>)}
+        <div className="mt-3 flex items-center justify-between">
+          <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded border ${statusStyles(p)}`}>{statusLabel(p)}</span>
+          <span className="text-[10px] text-[var(--color-text-muted)]">{p.configured ? 'key set' : 'no key'}</span>
         </div>
-        <div className="flex flex-wrap gap-2"><Link to={`/models/${p.id}`}><Button size="sm" variant="outline">Models</Button></Link><Button size="sm" variant="outline" icon={<Edit2 size={13} />} onClick={() => edit(p)}>Edit</Button><Button size="sm" variant="outline" icon={<Trash2 size={13} />} onClick={() => remove(p)}>Delete</Button></div>
-      </div>)}
+      </Link>)}
+      {!loading && !providers.length && <p className="col-span-full text-sm text-[var(--color-text-muted)]">Belum ada provider.</p>}
     </div>
   </div></div>;
 }

@@ -23,6 +23,10 @@ export async function fetchProviderModels(provider: any) {
       error: configured ? undefined : 'Command Code Go API key is not configured',
     };
   }
+  if (!provider.apiKey && !provider.baseUrl.startsWith('http://')) {
+    // ponytail: skip cloud providers without keys; local http providers may be keyless.
+    return { status: 'not_configured', models: [] as string[], error: `${provider.name} API key is not configured` };
+  }
   return fetchCustomProviderModels(provider);
 }
 

@@ -1,7 +1,8 @@
-export type ProviderId = 'commandcode-go';
+import { FREE_PROVIDERS } from './free/index.js';
+import { COMMANDCODE_GO_PROVIDER } from './special/commandCodeGo.js';
 
 export type ProviderConfig = {
-  id: ProviderId;
+  id: string;
   name: string;
   baseUrl: string;
   apiKey?: string;
@@ -9,12 +10,15 @@ export type ProviderConfig = {
   modelsPath?: string;
 };
 
-export function getProviders(): Record<ProviderId, ProviderConfig> {
-  return {
-    'commandcode-go': { id: 'commandcode-go', name: 'Command Code Go', baseUrl: 'https://api.commandcode.ai/alpha/generate' },
-  };
+export type ProviderId = string;
+
+// Registry provider bawaan: free tier (OpenAI-compatible) + special adapters.
+export function getProviders(): Record<string, ProviderConfig> {
+  const registry: Record<string, ProviderConfig> = {};
+  for (const provider of [...FREE_PROVIDERS, COMMANDCODE_GO_PROVIDER]) registry[provider.id] = provider;
+  return registry;
 }
 
-export function getProvider(id: ProviderId): ProviderConfig {
+export function getProvider(id: string): ProviderConfig | undefined {
   return getProviders()[id];
 }

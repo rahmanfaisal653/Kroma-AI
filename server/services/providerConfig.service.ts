@@ -3,7 +3,7 @@ import { getProvider, getProviders, type ProviderConfig, type ProviderId } from 
 
 const TABLE = 'docs';
 const CATEGORY = 'provider_config';
-const FIXED_IDS = ['commandcode-go'] as const;
+const FIXED_IDS = Object.keys(getProviders());
 
 type Audience = 'internal' | 'partner';
 type Input = { id?: string; name?: string; baseUrl?: string; token?: string; enabled?: boolean; visibility?: Audience[] | string; chatPath?: string; modelsPath?: string };
@@ -30,7 +30,7 @@ function safeProvider(provider: StoredProvider) {
   return { ...safe, configured: Boolean(apiKey), enabled: provider.enabled !== false, visibility: cleanVisibility(provider.visibility), chatPath: provider.chatPath || '/chat/completions', modelsPath: provider.modelsPath || '/models', model_checks: provider.model_checks || {} };
 }
 
-export function fixedProviderIds() { return [...FIXED_IDS] as ProviderId[]; }
+export function fixedProviderIds() { return [...FIXED_IDS]; }
 
 async function providerRows() {
   return db.findWhere(TABLE, 'category', CATEGORY);
@@ -41,11 +41,11 @@ export async function getProviderConfig(id: string): Promise<StoredProvider | nu
   const rows = await providerRows();
   const row = rows.find((item: any) => item.slug === slug(clean));
   const override = parse(row);
-  const isFixed = FIXED_IDS.includes(clean as any);
+  const isFixed = FIXED_IDS.includes(clean);
   if (override.deleted && !isFixed) return null;
 
   if (isFixed) {
-    const base = getProvider(clean as ProviderId);
+    const base = getProvider(clean as ProviderId)!;
     const apiKey = override.token ?? base.apiKey;
     return {
       id: base.id,
@@ -84,14 +84,14 @@ export async function listProviderConfigs() {
   const custom = rows
     .filter((row: any) => row.slug?.startsWith('provider-'))
     .map((row: any) => row.slug.replace('provider-', ''))
-    .filter((id: string) => !FIXED_IDS.includes(id as any));
+    .filter((id: string) => !FIXED_IDS.includes(id));
   const customProviders = await Promise.all(custom.map(getProviderConfig));
   return [...fixed, ...customProviders].filter(Boolean) as StoredProvider[];
 }
 
 export async function createProviderConfig(input: Input) {
   const id = cleanId(input.id || input.name || '');
-  if (!id || FIXED_IDS.includes(id as any)) return null;
+  if (!id || FIXED_IDS.includes(id)) return null;
   const baseUrl = cleanUrl(input.baseUrl);
   if (!baseUrl) return null;
   const existing = await getProviderConfig(id);
@@ -135,11 +135,11 @@ export async function deleteProviderConfig(id: string) {
   const clean = cleanId(id);
   const rows = await providerRows();
   const row = rows.find((item: any) => item.slug === slug(clean));
-  if (!FIXED_IDS.includes(clean as any)) {
+  if (!FIXED_IDS.includes(clean)) {
     if (row) await db.remove(TABLE, row.id);
     return;
   }
-  const base = getProvider(clean as ProviderId);
+  const base = getProvider(clean as ProviderId)!;
   const content = JSON.stringify({ name: base.name, baseUrl: base.baseUrl, token: base.apiKey || '', enabled: false, visibility: 'internal', chatPath: base.chatPath || '/chat/completions', modelsPath: base.modelsPath || '/models' });
   if (row) await db.update(TABLE, row.id, { title: base.name, content, published: true });
   else await db.create(TABLE, { title: base.name, slug: slug(clean), category: CATEGORY, content, published: true });

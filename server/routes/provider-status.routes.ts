@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { fetchCustomProviderModels } from '../ai/customProvider.js';
-import { COMMANDCODE_GO_MODELS } from '../ai/special/commandCodeGo.js';
+import { fetchProviderModels } from '../ai/modelCatalog.js';
 import { testProviderModel } from '../ai/modelTester.js';
 import { createProviderConfig, deleteProviderConfig, getProviderConfig, publicProviderConfigs, setProviderModelCheck, updateProviderConfig } from '../services/providerConfig.service.js';
 
@@ -13,12 +12,8 @@ router.get('/', async (_req, res) => {
   const data = await Promise.all(providers.map(async provider => {
     if (provider.enabled === false) return { ...provider, status: 'disabled', models: [] };
     const full = await getProviderConfig(provider.id);
-    if (provider.id === 'commandcode-go') {
-      const configured = Boolean(full?.apiKey);
-      return { ...provider, status: configured ? 'on' : 'not_configured', error: configured ? undefined : 'Command Code Go API key is not configured', models: configured ? COMMANDCODE_GO_MODELS.map(id => `${provider.id}/${id}`) : [] };
-    }
-    const checked = await fetchCustomProviderModels({ ...provider, apiKey: full?.apiKey });
-    return { ...provider, status: checked.status, error: checked.error, models: checked.models };
+    const result = await fetchProviderModels({ ...provider, apiKey: full?.apiKey });
+    return { ...provider, status: result.status, error: result.error, models: result.models };
   }));
   res.json(data);
 });

@@ -1,5 +1,12 @@
 import crypto from 'crypto';
 
+// Config provider special: endpoint tunggal /alpha/generate (bukan OpenAI-compatible).
+export const COMMANDCODE_GO_PROVIDER = {
+  id: 'commandcode-go',
+  name: 'Command Code Go',
+  baseUrl: 'https://api.commandcode.ai/alpha/generate',
+};
+
 export const COMMANDCODE_GO_MODELS = [
   'deepseek/deepseek-v4-pro',
   'deepseek/deepseek-v4-flash',
