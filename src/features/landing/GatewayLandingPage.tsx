@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, Clock3, Database, Route, Server, ShieldCheck, TerminalSquare } from 'lucide-react';
-import { providerStatusApi } from '../../services/api';
-import { providerIconUrl, ROBOT_ICON } from '../models/providerIcons';
+import { ArrowRight, Clock3, Database, Route, Server, ShieldCheck, TerminalSquare } from 'lucide-react';
 
 const curl = `curl -s -X POST http://localhost:20202/v1/chat/completions \\
   -H "x-api-key: kg_live_xxxxxxxxx" \\
@@ -19,20 +17,7 @@ const logs = [
   ['403', 'openrouter/meta-llama/llama-3.1-8b-instruct:free', '14ms', '0', 'partner'],
   ['502', 'deepseek/deepseek-chat', '3.0s', '0', 'partner'],
 ];
-type ProviderStatus = { id: string; name: string; status?: string; models?: string[]; custom?: boolean; enabled?: boolean };
-
 export default function GatewayLandingPage() {
-  const [providers, setProviders] = useState<ProviderStatus[]>([]);
-
-  useEffect(() => {
-    providerStatusApi.list()
-      .then((items: ProviderStatus[]) => setProviders((items || []).filter(item => !item.custom)))
-      .catch(() => setProviders([]));
-  }, []);
-
-  const enabledCount = providers.filter(p => p.enabled !== false).length;
-  const healthyCount = providers.filter(p => p.status === 'on').length;
-
   return <div className="h-full overflow-y-auto bg-[var(--color-bg)] text-[var(--color-text)]">
     <div className="mx-auto max-w-7xl px-5 py-6 space-y-7">
       <header className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
@@ -64,7 +49,7 @@ export default function GatewayLandingPage() {
 
       <section className="grid gap-4 md:grid-cols-4">
         <Metric label="requests / 24h" value="184,229" sub="across 6 providers" />
-        <Metric label="healthy providers" value={providers.length ? `${healthyCount} / ${enabledCount}` : '—'} sub="built-in registry" tone="emerald" />
+        <Metric label="healthy providers" value="—" sub="see Providers page" tone="emerald" />
         <Metric label="p95 latency" value="812ms" sub="Ollama + LM Studio" tone="amber" />
         <Metric label="token throughput" value="41.8M" sub="input + output" />
       </section>
@@ -83,10 +68,7 @@ export default function GatewayLandingPage() {
 
       <section id="dashboard" className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
         <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface-alt)] px-4 py-3"><div><p className="text-sm font-medium">Developer Dashboard</p><p className="font-mono text-xs text-[var(--color-text-muted)]">/providers · /keys · /usage</p></div><span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-600">gateway on</span></div>
-        <div className="grid lg:grid-cols-[320px_1fr]">
-          <div className="border-b border-[var(--color-border)] p-4 lg:border-b-0 lg:border-r"><p className="mb-3 text-xs uppercase tracking-wider text-[var(--color-text-muted)]">Built-in providers</p><div className="grid grid-cols-2 gap-2">{providers.map(p => <ProviderChip key={p.id} provider={p} />)}{!providers.length && <p className="col-span-2 text-xs text-[var(--color-text-muted)]">Provider registry belum termuat.</p>}</div></div>
-          <div className="overflow-x-auto p-4"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b border-[var(--color-border)] text-xs uppercase tracking-wider text-[var(--color-text-muted)]"><tr><th className="py-2">status</th><th>model</th><th>latency</th><th>tokens</th><th>key type</th></tr></thead><tbody className="divide-y divide-[var(--color-border)]">{logs.map(row => <tr key={row.join(':')} className="font-mono text-xs"><td className="py-3">{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td></tr>)}</tbody></table></div>
-        </div>
+        <div className="overflow-x-auto p-4"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b border-[var(--color-border)] text-xs uppercase tracking-wider text-[var(--color-text-muted)]"><tr><th className="py-2">status</th><th>model</th><th>latency</th><th>tokens</th><th>key type</th></tr></thead><tbody className="divide-y divide-[var(--color-border)]">{logs.map(row => <tr key={row.join(':')} className="font-mono text-xs"><td className="py-3">{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td></tr>)}</tbody></table></div>
       </section>
 
       <section id="docs" className="grid gap-6 pb-10 lg:grid-cols-[220px_1fr_220px]"><Card><p className="mb-3 text-xs uppercase tracking-wider text-[var(--color-text-muted)]">API Reference</p><p>/v1</p><p>/v1/models</p><p>/v1/chat/completions</p></Card><Card><h2 className="text-xl font-semibold">OpenAI-compatible chat</h2><p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">Use provider-prefixed model ids returned from <code>/v1/models</code>.</p><div className="mt-4"><CodeBlock code={curl} /></div></Card><Card><p className="mb-3 text-xs uppercase tracking-wider text-[var(--color-text-muted)]">On this page</p><p>Authentication</p><p>Provider sync</p><p>Chat request</p></Card></section>
@@ -95,17 +77,7 @@ export default function GatewayLandingPage() {
 }
 
 function CodeBlock({ code }: { code: string }) { return <pre className="overflow-x-auto rounded border border-[var(--color-border)] bg-[var(--color-code-bg)] p-4 text-xs leading-6 text-[var(--color-text)]"><code>{code}</code></pre>; }
-function ProviderChip({ provider }: { provider: ProviderStatus }) {
-  const status = provider.enabled === false ? 'disabled' : provider.status || 'unknown';
-  const tone = status === 'on' ? 'text-emerald-600' : status === 'not_configured' ? 'text-amber-600' : status === 'disabled' ? 'text-slate-500' : 'text-red-500';
-  return <div className="min-w-0 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
-    <div className="flex min-w-0 items-center gap-2">
-      <img src={providerIconUrl(provider.id, 'light')} alt="" className="h-5 w-5 shrink-0 rounded" loading="lazy" onError={e => { const img = e.target as HTMLImageElement; if (!img.src.endsWith(ROBOT_ICON)) img.src = ROBOT_ICON; }} />
-      <p className="truncate font-mono text-xs text-[var(--color-text)]">{provider.id}</p>
-    </div>
-    <p className={`mt-1 truncate text-[11px] ${tone}`}>{status} · {provider.models?.length || 0} models</p>
-  </div>;
-}
+
 function Metric({ label, value, sub, tone = 'normal' }: { label: string; value: string; sub: string; tone?: 'normal' | 'emerald' | 'amber' }) { const color = tone === 'emerald' ? 'text-emerald-600' : tone === 'amber' ? 'text-amber-600' : 'text-[var(--color-text)]'; return <Card><p className="text-[11px] uppercase tracking-wider text-[var(--color-text-muted)]">{label}</p><p className={`mt-2 font-mono text-2xl font-semibold ${color}`}>{value}</p><p className="mt-1 text-xs text-[var(--color-text-muted)]">{sub}</p></Card>; }
 function Card({ children }: { children: React.ReactNode }) { return <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">{children}</div>; }
 function MiniRoute({ provider, model, use }: { provider: string; model: string; use: string }) { return <div className="rounded border border-[var(--color-border)] bg-[var(--color-bg)] p-3"><p className="font-mono text-sm text-[var(--color-text)]">{provider}/{model}</p><p className="mt-1 text-xs text-[var(--color-text-muted)]">{use}</p></div>; }

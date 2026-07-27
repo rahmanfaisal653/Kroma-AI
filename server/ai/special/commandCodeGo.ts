@@ -5,7 +5,6 @@ export const COMMANDCODE_GO_PROVIDER = {
   id: 'commandcode-go',
   name: 'Command Code Go',
   baseUrl: 'https://api.commandcode.ai/alpha/generate',
-  kind: 'special' as const,
 };
 
 export const COMMANDCODE_GO_MODELS = [

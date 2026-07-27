@@ -1,5 +1,5 @@
 import { FREE_PROVIDERS } from './free/index.js';
-import { COMMANDCODE_GO_PROVIDER } from './special/commandCodeGo.js';
+import { SPECIAL_PROVIDERS } from './special/index.js';
 
 export type ProviderConfig = {
   id: string;
@@ -16,7 +16,7 @@ export type ProviderId = string;
 // Registry provider bawaan: free tier (OpenAI-compatible) + special adapters.
 export function getProviders(): Record<string, ProviderConfig> {
   const registry: Record<string, ProviderConfig> = {};
-  for (const provider of [...FREE_PROVIDERS, COMMANDCODE_GO_PROVIDER]) registry[provider.id] = provider;
+  for (const provider of [...FREE_PROVIDERS, ...SPECIAL_PROVIDERS]) registry[provider.id] = provider;
   return registry;
 }
 
