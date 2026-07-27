@@ -1,7 +1,7 @@
 import { fetchCustomProviderModels, visibleProviders } from './customProvider.js';
 import { COMMANDCODE_GO_MODELS } from './special/commandCodeGo.js';
 import { findGatewayKey } from '../services/internalApiKey.service.js';
-import { publicProviderConfigs } from '../services/providerConfig.service.js';
+import { listProviderConfigs } from '../services/providerConfig.service.js';
 
 export type ModelEntry = {
   id: string;
@@ -45,7 +45,7 @@ export async function ownerTypeFromRequest(req: any): Promise<'internal' | 'part
 }
 
 export async function listGatewayModels(ownerType: 'internal' | 'partner'): Promise<ModelEntry[]> {
-  const providers = visibleProviders(await publicProviderConfigs(), ownerType);
+  const providers = visibleProviders(await listProviderConfigs(), ownerType);
   const rows = await Promise.all(providers.map(async provider => {
     const result = await fetchProviderModels(provider);
     return result.models.map(id => {
