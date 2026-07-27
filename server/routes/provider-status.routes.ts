@@ -9,15 +9,18 @@ router.use(requireAuth);
 
 router.get('/', async (_req, res) => {
   const providers = await publicProviderConfigs();
-  const data = await Promise.all(providers.map(async provider => {
+  const data = await Promise.allSettled(providers.map(async provider => {
     if (provider.enabled === false) return { ...provider, status: 'disabled', models: [] };
     const full = await getProviderConfig(provider.id);
     const result = await fetchProviderModels({ ...provider, apiKey: full?.apiKey });
     const fresh = await pruneProviderModelChecks(provider.id, result.models);
     const model_checks = fresh?.model_checks || {};
     return { ...provider, model_checks, status: result.status, error: result.error, models: activeCheckedModels(result.models, model_checks) };
+  })).then(results => results.map(r => {
+    if (r.status === 'fulfilled') return r.value;
+    return { ...providers.find(p => p.id === String(r.reason?.providerId || '')), status: 'error', error: r.reason?.message || 'fetch failed', models: [], model_checks: {} };
   }));
-  res.json(data);
+  res.json(data.filter(Boolean));
 });
 
 router.post('/', async (req, res) => {

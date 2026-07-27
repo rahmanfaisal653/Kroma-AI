@@ -19,7 +19,7 @@ export async function fetchProviderModels(provider: any) {
     const configured = Boolean(provider.apiKey);
     return {
       status: configured ? 'on' : 'not_configured',
-      models: configured ? COMMANDCODE_GO_MODELS.map(id => `${provider.id}/${id}`) : [] as string[],
+      models: COMMANDCODE_GO_MODELS.map(id => `${provider.id}/${id}`),
       error: configured ? undefined : 'Command Code Go API key is not configured',
     };
   }
@@ -52,9 +52,10 @@ export async function listGatewayModels(ownerType: 'internal' | 'partner'): Prom
   const providers = visibleProviders(await listProviderConfigs(), ownerType);
   const rows = await Promise.all(providers.map(async provider => {
     const result = await fetchProviderModels(provider);
-    await pruneProviderModelChecks(provider.id, result.models);
-    return activeCheckedModels(result.models, provider.model_checks).map(id => {
-      const check = provider.model_checks?.[id];
+    const fresh = await pruneProviderModelChecks(provider.id, result.models);
+    const checks = fresh?.model_checks || provider.model_checks || {};
+    return activeCheckedModels(result.models, checks).map(id => {
+      const check = checks[id];
       return {
         id,
         object: 'model' as const,
