@@ -10,6 +10,11 @@ type Input = { id?: string; name?: string; baseUrl?: string; token?: string; ena
 type ModelCheck = Record<string, { status: 'on' | 'off'; error?: string; checked_at: string }>;
 type StoredProvider = ProviderConfig & { kind?: 'free' | 'special' | 'custom'; overridden?: boolean; custom?: boolean; configured: boolean; enabled: boolean; visibility: Audience[]; model_checks?: ModelCheck };
 
+function pruneModelChecks(checks: ModelCheck = {}, models: string[] = []) {
+ const allowed = new Set(models);
+ return Object.fromEntries(Object.entries(checks).filter(([id]) => allowed.has(id))) as ModelCheck;
+}
+
 function cleanUrl(value = '') {
   return value
     .trim()
@@ -121,15 +126,20 @@ export async function updateProviderConfig(id: string, input: Input) {
   if (!current) return null;
   const rows = await providerRows();
   const row = rows.find((item: any) => item.slug === slug(clean));
+  const nextBaseUrl = cleanUrl(input.baseUrl || current.baseUrl);
+  const nextToken = input.token ?? current.apiKey ?? '';
+  const nextChatPath = input.chatPath || current.chatPath || '/chat/completions';
+  const nextModelsPath = input.modelsPath || current.modelsPath || '/models';
+  const keepChecks = nextBaseUrl === current.baseUrl && nextToken === (current.apiKey || '') && nextChatPath === (current.chatPath || '/chat/completions') && nextModelsPath === (current.modelsPath || '/models');
   const content = JSON.stringify({
     name: input.name?.trim() || current.name,
-    baseUrl: cleanUrl(input.baseUrl || current.baseUrl),
-    token: input.token ?? current.apiKey ?? '',
+    baseUrl: nextBaseUrl,
+    token: nextToken,
     enabled: input.enabled ?? current.enabled,
     visibility: cleanVisibility(input.visibility || current.visibility),
-    chatPath: input.chatPath || current.chatPath || '/chat/completions',
-    modelsPath: input.modelsPath || current.modelsPath || '/models',
-    model_checks: current.model_checks || {},
+    chatPath: nextChatPath,
+    modelsPath: nextModelsPath,
+    model_checks: keepChecks ? current.model_checks || {} : {},
   });
   if (row) await db.update(TABLE, row.id, { title: input.name?.trim() || current.name, content, published: true });
   else await db.create(TABLE, { title: current.name, slug: slug(clean), category: CATEGORY, content, published: true });
@@ -151,10 +161,33 @@ export async function deleteProviderConfig(id: string) {
 }
 
 export async function publicProviderConfigs() {
-  return (await listProviderConfigs()).map(safeProvider);
+ return (await listProviderConfigs()).map(safeProvider);
 }
 
 export { getProviders };
+
+export async function pruneProviderModelChecks(providerId: string, models: string[]) {
+ const clean = cleanId(providerId);
+ const current = await getProviderConfig(clean);
+ if (!current) return null;
+ const pruned = pruneModelChecks(current.model_checks, models);
+ if (Object.keys(pruned).length === Object.keys(current.model_checks || {}).length) return current;
+ const rows = await providerRows();
+ const row = rows.find((item: any) => item.slug === slug(clean));
+ const content = JSON.stringify({
+ name: current.name,
+ baseUrl: current.baseUrl,
+ token: current.apiKey || '',
+ enabled: current.enabled,
+ visibility: current.visibility,
+ chatPath: current.chatPath || '/chat/completions',
+ modelsPath: current.modelsPath || '/models',
+ model_checks: pruned,
+ });
+ if (row) await db.update(TABLE, row.id, { title: current.name, content, published: true });
+ else await db.create(TABLE, { title: current.name, slug: slug(clean), category: CATEGORY, content, published: true });
+ return getProviderConfig(clean);
+}
 
 export async function setProviderModelCheck(providerId: string, modelId: string, result: { status: 'on' | 'off'; error?: string }) {
   const clean = cleanId(providerId);

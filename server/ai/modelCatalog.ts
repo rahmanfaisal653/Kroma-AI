@@ -1,7 +1,7 @@
 import { fetchCustomProviderModels, visibleProviders } from './customProvider.js';
 import { COMMANDCODE_GO_MODELS } from './special/commandCodeGo.js';
 import { findGatewayKey } from '../services/internalApiKey.service.js';
-import { listProviderConfigs } from '../services/providerConfig.service.js';
+import { listProviderConfigs, pruneProviderModelChecks } from '../services/providerConfig.service.js';
 
 export type ModelEntry = {
   id: string;
@@ -30,6 +30,10 @@ export async function fetchProviderModels(provider: any) {
   return fetchCustomProviderModels(provider);
 }
 
+export function activeCheckedModels(models: string[], checks: Record<string, any> = {}) {
+  return models.filter(id => checks[id]?.status === 'on');
+}
+
 export async function ownerTypeFromRequest(req: any): Promise<'internal' | 'partner'> {
   const xKey = String(req.headers['x-api-key'] || '').trim();
   const auth = String(req.headers.authorization || '').trim();
@@ -48,7 +52,8 @@ export async function listGatewayModels(ownerType: 'internal' | 'partner'): Prom
   const providers = visibleProviders(await listProviderConfigs(), ownerType);
   const rows = await Promise.all(providers.map(async provider => {
     const result = await fetchProviderModels(provider);
-    return result.models.map(id => {
+    await pruneProviderModelChecks(provider.id, result.models);
+    return activeCheckedModels(result.models, provider.model_checks).map(id => {
       const check = provider.model_checks?.[id];
       return {
         id,

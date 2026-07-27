@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { fetchProviderModels } from '../ai/modelCatalog.js';
+import { activeCheckedModels, fetchProviderModels } from '../ai/modelCatalog.js';
 import { testProviderModel } from '../ai/modelTester.js';
-import { createProviderConfig, deleteProviderConfig, getProviderConfig, publicProviderConfigs, setProviderModelCheck, updateProviderConfig } from '../services/providerConfig.service.js';
+import { createProviderConfig, deleteProviderConfig, getProviderConfig, pruneProviderModelChecks, publicProviderConfigs, setProviderModelCheck, updateProviderConfig } from '../services/providerConfig.service.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -13,7 +13,9 @@ router.get('/', async (_req, res) => {
     if (provider.enabled === false) return { ...provider, status: 'disabled', models: [] };
     const full = await getProviderConfig(provider.id);
     const result = await fetchProviderModels({ ...provider, apiKey: full?.apiKey });
-    return { ...provider, status: result.status, error: result.error, models: result.models };
+    const fresh = await pruneProviderModelChecks(provider.id, result.models);
+    const model_checks = fresh?.model_checks || {};
+    return { ...provider, model_checks, status: result.status, error: result.error, models: activeCheckedModels(result.models, model_checks) };
   }));
   res.json(data);
 });
@@ -52,7 +54,10 @@ router.post('/:id/test-model', async (req, res) => {
   const model = String(req.body?.model || '').trim();
   if (!provider) return res.status(404).json({ error: 'provider not found' });
   if (!model) return res.status(400).json({ error: 'model is required' });
+  if (provider.enabled === false) return res.status(400).json({ error: 'provider is disabled' });
   const providerModel = model.startsWith(`${provider.id}/`) ? model.slice(provider.id.length + 1) : model;
+  const listed = await fetchProviderModels(provider);
+  if (!listed.models.includes(`${provider.id}/${providerModel}`)) return res.status(404).json({ error: 'model not listed by provider' });
   const result = await testProviderModel(provider, providerModel);
   await setProviderModelCheck(provider.id, `${provider.id}/${providerModel}`, result);
   res.json({ model: `${provider.id}/${providerModel}`, ...result });
