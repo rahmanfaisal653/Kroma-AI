@@ -28,7 +28,7 @@ const toggleVisibility = (current: Visibility[], value: Visibility) => {
   const next = current.includes(value) ? current.filter(item => item !== value) : [...current, value];
   return next.length ? next : current;
 };
-const providerKind = (p: ProviderStatus): ProviderKind => p.kind || (p.custom ? 'custom' : 'free');
+const providerKind = (p: ProviderStatus): ProviderKind | 'unknown' => p.kind || (p.custom ? 'custom' : 'unknown');
 const statusStyles = (p: ProviderStatus) => {
   if (p.enabled === false) return 'border-slate-500/40 bg-slate-500/10 text-slate-400';
   if (p.status === 'on') return 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400';
