@@ -67,6 +67,7 @@ export default function ModelsPage() {
   const freeProviders = providers.filter(p => providerKind(p) === 'free');
   const specialProviders = providers.filter(p => providerKind(p) === 'special');
   const customProviders = providers.filter(p => providerKind(p) === 'custom');
+  const unknownProviders = providers.filter(p => providerKind(p) === 'unknown');
 
   return <div className="h-full overflow-y-auto"><div className="max-w-6xl mx-auto p-6 space-y-6 animate-fade-in">
     <div className="flex items-start justify-between gap-3">
@@ -96,6 +97,7 @@ export default function ModelsPage() {
     <ProviderSection title="Free Providers" desc="OpenAI-compatible bawaan. Tinggal isi API key." providers={freeProviders} theme={theme} loading={loading} />
     <ProviderSection title="Special Providers" desc="Provider non-OpenAI-compatible yang butuh adapter khusus." providers={specialProviders} theme={theme} loading={loading} />
     <ProviderSection title="Custom Providers" desc="Provider manual dari dashboard. Bisa kamu hapus/edit sendiri." providers={customProviders} theme={theme} loading={loading} empty="Belum ada custom provider." />
+    {!!unknownProviders.length && <ProviderSection title="Uncategorized Providers" desc="Backend belum mengirim kind. Restart backend / deploy server terbaru." providers={unknownProviders} theme={theme} loading={loading} />}
   </div></div>;
 }
 

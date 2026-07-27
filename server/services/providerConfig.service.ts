@@ -27,7 +27,7 @@ function cleanVisibility(value?: Audience[] | string): Audience[] {
 }
 function safeProvider(provider: StoredProvider) {
   const { apiKey, ...safe } = provider;
-  return { ...safe, kind: provider.kind || (provider.custom ? 'custom' : 'free'), configured: Boolean(apiKey), enabled: provider.enabled !== false, visibility: cleanVisibility(provider.visibility), chatPath: provider.chatPath || '/chat/completions', modelsPath: provider.modelsPath || '/models', model_checks: provider.model_checks || {} };
+  return { ...safe, kind: provider.kind || (provider.custom ? 'custom' : undefined), configured: Boolean(apiKey), enabled: provider.enabled !== false, visibility: cleanVisibility(provider.visibility), chatPath: provider.chatPath || '/chat/completions', modelsPath: provider.modelsPath || '/models', model_checks: provider.model_checks || {} };
 }
 
 export function fixedProviderIds() { return [...FIXED_IDS]; }
