@@ -31,7 +31,7 @@ export async function fetchProviderModels(provider: any) {
 }
 
 export function activeCheckedModels(models: string[], checks: Record<string, any> = {}) {
-  return models.filter(id => checks[id]?.status === 'on');
+  return models.filter(id => checks[id]?.status !== 'off');
 }
 
 export async function ownerTypeFromRequest(req: any): Promise<'internal' | 'partner'> {
