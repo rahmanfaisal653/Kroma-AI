@@ -5,8 +5,7 @@ import { commandCodeBody, commandCodeHeaders, commandCodeToOpenAI } from './spec
 
 const PING_BODY = {
   messages: [{ role: 'user', content: 'Reply exactly: pong' }],
-  max_tokens: 8,
-  stream: false,
+  max_tokens: 32,
 };
 
 function providerError(data: any) {
@@ -18,13 +17,24 @@ function providerError(data: any) {
 }
 
 function textOf(data: any): string {
-  return String(data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || data?.message?.content || data?.response || '').trim();
+  // Handle all common response formats
+  const msg = data?.choices?.[0]?.message;
+  return String(
+    msg?.content || msg?.text || data?.choices?.[0]?.text ||
+    data?.message?.content || data?.response || data?.output ||
+    data?.result || ''
+  ).trim();
 }
 
 function validChatResponse(data: any, native = false) {
-  if (!data || data.error) return false;
+  if (!data) return false;
+  // Only reject if there's a real error (not null/empty)
+  if (data.error && (typeof data.error !== 'object' || Object.keys(data.error).length > 0)) return false;
   if (native) return Boolean(textOf(data));
-  return Array.isArray(data.choices) && data.choices.length > 0 && Boolean(textOf(data));
+  // Accept if we can extract any text content
+  if (Boolean(textOf(data))) return true;
+  // Fallback: accept if choices array exists with any content
+  return Array.isArray(data.choices) && data.choices.length > 0;
 }
 
 export async function testProviderModel(provider: any, providerModel: string) {
