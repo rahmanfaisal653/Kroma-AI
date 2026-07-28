@@ -99,7 +99,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
   if (!model) { await logGatewayFailure(req, modelId, 404, 'model/provider not found', started); return apiError(res, 404, 'MODEL_NOT_FOUND', 'model/provider not found', { received: modelId, providerPrefix: prefix, hint: 'Check GET /v1/models and use one of the returned model ids.' }); }
   if (!req.gatewayKey) return apiError(res, 401, 'INVALID_API_KEY', 'invalid API key');
 
-  const provider = configured ? { id: configured.id, baseUrl: configured.baseUrl, apiKey: config...Key, chatPath: configured.chatPath, modelsPath: configured.modelsPath, name: configured.name, enabled: configured.enabled, visibility: configured.visibility, chatFormat: (configured as any).chatFormat || 'openai' } : null;
+  const provider = configured ? { id: configured.id, baseUrl: configured.baseUrl, apiKey: configured.apiKey, chatPath: configured.chatPath, modelsPath: configured.modelsPath, name: configured.name, enabled: configured.enabled, visibility: configured.visibility, chatFormat: (configured as any).chatFormat || 'openai' } : null;
   if (!provider) { await logGatewayFailure(req, modelId, 404, 'provider not found', started); return apiError(res, 404, 'PROVIDER_NOT_FOUND', 'provider not found', { provider: model.provider, hint: 'Check GET /v1/models.' }); }
   if (!canUseProvider(provider, req.gatewayKey.owner_type)) { await logGatewayFailure(req, modelId, 403, 'provider not available for this API key', started); return apiError(res, 403, 'PROVIDER_NOT_ALLOWED', 'provider is not available for this API key', { provider: provider.id, key_type: req.gatewayKey.owner_type }); }
   const estimatedInput = estimateTokens(messages);
