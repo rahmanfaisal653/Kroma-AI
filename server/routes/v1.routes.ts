@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import axios from 'axios';
-import { providerChatTargets, providerHeaders, openAiCompatibleBody, nativeOllamaBody, nativeOllamaToOpenAI, canUseProvider, renderBodyTemplate } from '../ai/customProvider.js';
+import { providerChatTargets, providerHeaders, nativeOllamaToOpenAI, canUseProvider, buildChatBody } from '../ai/customProvider.js';
 import { commandCodeBody, commandCodeHeaders, commandCodeToOpenAI } from '../ai/special/commandCodeGo.js';
 import { requireGatewayKey } from '../middleware/internalApiKey.middleware.js';
 import { touchGatewayKey } from '../services/internalApiKey.service.js';
@@ -99,7 +99,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
   if (!model) { await logGatewayFailure(req, modelId, 404, 'model/provider not found', started); return apiError(res, 404, 'MODEL_NOT_FOUND', 'model/provider not found', { received: modelId, providerPrefix: prefix, hint: 'Check GET /v1/models and use one of the returned model ids.' }); }
   if (!req.gatewayKey) return apiError(res, 401, 'INVALID_API_KEY', 'invalid API key');
 
-  const provider = configured ? { id: configured.id, baseUrl: configured.baseUrl, apiKey: configured.apiKey, chatPath: configured.chatPath, modelsPath: configured.modelsPath, name: configured.name, enabled: configured.enabled, visibility: configured.visibility, bodyTemplate: (configured as any).bodyTemplate || '' } : null;
+  const provider = configured ? { id: configured.id, baseUrl: configured.baseUrl, apiKey: config...Key, chatPath: configured.chatPath, modelsPath: configured.modelsPath, name: configured.name, enabled: configured.enabled, visibility: configured.visibility, chatFormat: (configured as any).chatFormat || 'openai' } : null;
   if (!provider) { await logGatewayFailure(req, modelId, 404, 'provider not found', started); return apiError(res, 404, 'PROVIDER_NOT_FOUND', 'provider not found', { provider: model.provider, hint: 'Check GET /v1/models.' }); }
   if (!canUseProvider(provider, req.gatewayKey.owner_type)) { await logGatewayFailure(req, modelId, 403, 'provider not available for this API key', started); return apiError(res, 403, 'PROVIDER_NOT_ALLOWED', 'provider is not available for this API key', { provider: provider.id, key_type: req.gatewayKey.owner_type }); }
   const estimatedInput = estimateTokens(messages);
@@ -121,9 +121,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
     } else for (const target of providerChatTargets(provider)) {
       if (stream && target.native) continue;
       triedChat.push(target.url);
-      const prompt = messages.filter((m: any) => m.role === 'user').map((m: any) => m.content).join('\n');
-      const templateBody = provider.bodyTemplate ? renderBodyTemplate(provider.bodyTemplate, messages, model.providerModel, prompt) : undefined;
-      const body = templateBody || (target.native ? nativeOllamaBody(req.body, model.providerModel) : openAiCompatibleBody({ ...req.body, messages, stream }, model.providerModel));
+      const body = buildChatBody(provider, messages, model.providerModel);
       const candidate = await axios.post(target.url, body, { timeout: config.defaultTimeoutMs, responseType: stream ? 'stream' : 'json', headers, validateStatus: () => true });
       upstream = candidate;
       nativeOllama = target.native;

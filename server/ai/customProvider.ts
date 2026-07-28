@@ -105,15 +105,13 @@ export function visibleProviders(providers: any[], ownerType: 'internal' | 'part
   return providers.filter(provider => canUseProvider(provider, ownerType));
 }
 
-export function renderBodyTemplate(template: string, messages: any[], model: string, prompt: string): any | undefined {
-  if (!template) return undefined;
-  try {
-    const rendered = template
-      .replace(/\{\{messages\}\}/g, JSON.stringify(messages))
-      .replace(/\{\{model\}\}/g, model.replace(/\\/g, '\\\\').replace(/"/g, '\\"'))
-      .replace(/\{\{prompt\}\}/g, prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"'));
-    return JSON.parse(rendered);
-  } catch {
-    return undefined;
+export function buildChatBody(provider: any, messages: any[], model: string): any {
+  if (provider.chatFormat === 'ollama') {
+    return {
+      prompt: messages.filter((m: any) => m.role !== 'system').map((m: any) => m.content).join('\n'),
+      model,
+      stream: false,
+    };
   }
+  return { messages, model, max_tokens: 32 };
 }

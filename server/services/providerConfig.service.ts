@@ -6,7 +6,7 @@ const CATEGORY = 'provider_config';
 const FIXED_IDS = Object.keys(getProviders());
 
 type Audience = 'internal' | 'partner';
-type Input = { id?: string; name?: string; baseUrl?: string; token?: string; enabled?: boolean; visibility?: Audience[] | string; chatPath?: string; modelsPath?: string; bodyTemplate?: string };
+type Input = { id?: string; name?: string; baseUrl?: string; token?: string; enabled?: boolean; visibility?: Audience[] | string; chatPath?: string; modelsPath?: string; chatFormat?: string };
 type ModelCheck = Record<string, { status: 'on' | 'off'; error?: string; checked_at: string }>;
 type StoredProvider = ProviderConfig & { kind?: 'free' | 'special' | 'custom'; overridden?: boolean; custom?: boolean; configured: boolean; enabled: boolean; visibility: Audience[]; model_checks?: ModelCheck };
 
@@ -85,7 +85,7 @@ export async function getProviderConfig(id: string): Promise<StoredProvider | nu
     kind: 'custom',
     overridden: true,
     custom: true,
-    bodyTemplate: override.bodyTemplate || '',
+    chatFormat: override.chatFormat || 'openai',
   } as StoredProvider;
 }
 
@@ -115,7 +115,7 @@ export async function createProviderConfig(input: Input) {
     visibility: cleanVisibility(input.visibility),
     chatPath: input.chatPath || '/chat/completions',
     modelsPath: input.modelsPath || '/models',
-    bodyTemplate: input.bodyTemplate || '',
+    chatFormat: input.chatFormat || 'openai',
     model_checks: {},
   });
   await db.create(TABLE, { title: input.name?.trim() || id, slug: slug(id), category: CATEGORY, content, published: true });
@@ -141,7 +141,7 @@ export async function updateProviderConfig(id: string, input: Input) {
     visibility: cleanVisibility(input.visibility || current.visibility),
     chatPath: nextChatPath,
     modelsPath: nextModelsPath,
-    bodyTemplate: input.bodyTemplate ?? (current as any).bodyTemplate ?? '',
+    chatFormat: input.chatFormat || (current as any).chatFormat || 'openai',
     model_checks: keepChecks ? current.model_checks || {} : {},
   });
   if (row) await db.update(TABLE, row.id, { title: input.name?.trim() || current.name, content, published: true });
@@ -185,7 +185,7 @@ export async function pruneProviderModelChecks(providerId: string, models: strin
  visibility: current.visibility,
  chatPath: current.chatPath || '/chat/completions',
  modelsPath: current.modelsPath || '/models',
- bodyTemplate: (current as any).bodyTemplate || '',
+ chatFormat: (current as any).chatFormat || 'openai',
  model_checks: pruned,
  });
  if (row) await db.update(TABLE, row.id, { title: current.name, content, published: true });

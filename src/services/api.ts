@@ -39,8 +39,8 @@ export const internalKeysApi = {
 type ProviderVisibility = 'internal' | 'partner';
 export const providerStatusApi = {
   list: () => http.get('/api/provider-status').then(r => r.data),
-  create: (data: { id?: string; name: string; baseUrl: string; apiKey?: string; chatPath?: string; modelsPath?: string; bodyTemplate?: string; enabled?: boolean; visibility?: ProviderVisibility[] }) => http.post('/api/provider-status', data).then(r => r.data),
-  update: (id: string, data: { name?: string; baseUrl: string; apiKey?: string; chatPath?: string; modelsPath?: string; bodyTemplate?: string; enabled?: boolean; visibility?: ProviderVisibility[] }) => http.put(`/api/provider-status/${id}`, data).then(r => r.data),
+  create: (data: { id?: string; name: string; baseUrl: string; apiKey?: string; chatPath?: string; modelsPath?: string; chatFormat?: string; enabled?: boolean; visibility?: ProviderVisibility[] }) => http.post('/api/provider-status', data).then(r => r.data),
+  update: (id: string, data: { name?: string; baseUrl: string; apiKey?: string; chatPath?: string; modelsPath?: string; chatFormat?: string; enabled?: boolean; visibility?: ProviderVisibility[] }) => http.put(`/api/provider-status/${id}`, data).then(r => r.data),
   reset: (id: string) => http.delete(`/api/provider-status/${id}`).then(r => r.data),
   testModel: (id: string, model: string) => http.post(`/api/provider-status/${id}/test-model`, { model }).then(r => r.data),
 };
