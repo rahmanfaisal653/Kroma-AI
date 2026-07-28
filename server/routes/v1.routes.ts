@@ -112,10 +112,51 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
     let triedChat: string[] = [];
 
     if (provider.id === 'commandcode-go') {
-      if (stream) return apiError(res, 400, 'VALIDATION_ERROR', 'Command Code Go is non-streaming in Kroma MVP', { provider: provider.id, model: model.providerModel });
       const url = provider.baseUrl;
       const body = commandCodeBody(model.providerModel, req.body, messages);
       triedChat.push(url);
+      if (stream) {
+        const raw = await axios.post(url, body, { timeout: config.defaultTimeoutMs, responseType: 'stream', headers: commandCodeHeaders(headers), validateStatus: () => true });
+        if (raw.status >= 400) return apiError(res, raw.status >= 400 && raw.status < 500 ? raw.status : 502, 'PROVIDER_ERROR', 'provider stream failed', { provider: provider.id, upstreamStatus: raw.status, model: model.providerModel });
+        res.status(200);
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        let output = '';
+        const chatId = `chatcmpl-${Date.now()}`;
+        raw.data.on('data', (chunk: Buffer) => {
+          const lines = chunk.toString('utf8').split(/\r?\n/).filter(Boolean);
+          for (const line of lines) {
+            let event: any;
+            try { event = JSON.parse(line.startsWith('data:') ? line.slice(5).trim() : line); } catch { continue; }
+            if (event.type === 'text-delta' && (event.text || event.delta)) {
+              const sse = `data: ${JSON.stringify({ id: chatId, object: 'chat.completion.chunk', choices: [{ index: 0, delta: { content: event.text || event.delta }, finish_reason: null }] })}\n\n`;
+              output += event.text || event.delta || '';
+              res.write(sse);
+            }
+            if (event.type === 'reasoning-delta' && event.text) {
+              const sse = `data: ${JSON.stringify({ id: chatId, object: 'chat.completion.chunk', choices: [{ index: 0, delta: { reasoning_content: event.text }, finish_reason: null }] })}\n\n`;
+              res.write(sse);
+            }
+            if (event.type === 'error') {
+              const sse = `data: ${JSON.stringify({ error: { message: typeof event.error === 'string' ? event.error : JSON.stringify(event.error || event.message || 'Command Code error') } })}\n\n`;
+              res.write(sse);
+            }
+          }
+        });
+        raw.data.on('end', async () => {
+          const endSse = `data: ${JSON.stringify({ id: chatId, object: 'chat.completion.chunk', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`;
+          res.write(endSse);
+          const outputTokens = estimateTokens(output);
+          await Promise.allSettled([touchGatewayKey(req.gatewayKey!.id), logUsage({ userId: 0, apiKeyId: req.gatewayKey!.id, apiId: model.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens: estimatedInput, outputTokens, totalTokens: estimatedInput + outputTokens, latencyMs: Date.now() - started, statusCode: 200, ipAddress: req.ip, userAgent: req.get('user-agent') })]);
+          res.end();
+        });
+        raw.data.on('error', async (err: any) => {
+          await logUsage({ userId: 0, apiKeyId: req.gatewayKey!.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens: estimatedInput, totalTokens: estimatedInput, latencyMs: Date.now() - started, statusCode: 502, errorMessage: err.message, ipAddress: req.ip, userAgent: req.get('user-agent') });
+          res.end();
+        });
+        return;
+      }
       const raw = await axios.post(url, body, { timeout: config.defaultTimeoutMs, responseType: 'text', headers: commandCodeHeaders(headers), validateStatus: () => true, transformResponse: [(data) => data] });
       upstream = { ...raw, data: raw.status >= 400 ? (() => { try { return JSON.parse(raw.data); } catch { return { error: { message: raw.data } }; } })() : commandCodeToOpenAI(raw.data, model.id) };
     } else for (const target of providerChatTargets(provider)) {
