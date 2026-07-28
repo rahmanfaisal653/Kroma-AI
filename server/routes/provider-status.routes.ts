@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { activeCheckedModels, fetchProviderModels } from '../ai/modelCatalog.js';
+import { fetchProviderModels } from '../ai/modelCatalog.js';
 import { testProviderModel } from '../ai/modelTester.js';
 import { createProviderConfig, deleteProviderConfig, getProviderConfig, pruneProviderModelChecks, publicProviderConfigs, setProviderModelCheck, updateProviderConfig } from '../services/providerConfig.service.js';
 
@@ -15,7 +15,7 @@ router.get('/', async (_req, res) => {
     const result = await fetchProviderModels({ ...provider, apiKey: full?.apiKey });
     const fresh = await pruneProviderModelChecks(provider.id, result.models);
     const model_checks = fresh?.model_checks || {};
-    return { ...provider, model_checks, status: result.status, error: result.error, models: activeCheckedModels(result.models, model_checks) };
+    return { ...provider, model_checks, status: result.status, error: result.error, models: result.models };
   })).then(results => results.map(r => {
     if (r.status === 'fulfilled') return r.value;
     return { ...providers.find(p => p.id === String(r.reason?.providerId || '')), status: 'error', error: r.reason?.message || 'fetch failed', models: [], model_checks: {} };
