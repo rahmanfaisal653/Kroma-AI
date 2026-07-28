@@ -36,12 +36,9 @@ assert.deepStrictEqual(
 
 // 4) only 'off' is hidden, 'unknown' + 'on' keep
 assert.deepStrictEqual(
-  activeCheckedModels(['p/on', 'p/off', 'p/unknown'], { 'p/on': { status: 'on' }, 'p/off': { status: 'off' } }),
-  ['p/on', 'p/unknown']
+  visibleModels(() => ['groq/live', 'groq/off', 'groq/unknown'], { 'groq/live': { status: 'on' }, 'groq/off': { status: 'off' }, 'groq/deleted': { status: 'on' } }),
+  [{ id: 'groq/live', status: 'on' }, { id: 'groq/unknown', status: 'unknown' }]
 );
 
-// 5) model matching
-assert.equal(sameModel('deleted-model', 'live-model'), false);
-assert.equal(sameModel('openrouter/live-model', 'live-model'), true);
-
+// ponytail: mirrors gateway stale-check pruning; upgrade by moving helper to shared pure fn when test runner exists.
 console.log('ok');

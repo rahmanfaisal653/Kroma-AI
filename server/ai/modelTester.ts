@@ -21,16 +21,10 @@ function textOf(data: any): string {
   return String(data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text || data?.message?.content || data?.response || '').trim();
 }
 
-function sameModel(actual: any, expected: string) {
-  if (!actual) return true;
-  const got = String(actual).trim();
-  return got === expected || got.endsWith(`/${expected}`) || expected.endsWith(`/${got}`);
-}
-
-function validChatResponse(data: any, native = false, expectedModel = '') {
+function validChatResponse(data: any, native = false) {
   if (!data || data.error) return false;
   if (native) return Boolean(textOf(data));
-  return sameModel(data.model, expectedModel) && Array.isArray(data.choices) && data.choices.length > 0 && Boolean(textOf(data));
+  return Array.isArray(data.choices) && data.choices.length > 0 && Boolean(textOf(data));
 }
 
 export async function testProviderModel(provider: any, providerModel: string) {
@@ -41,7 +35,7 @@ export async function testProviderModel(provider: any, providerModel: string) {
     if (raw.status >= 400) return { status: 'off' as const, error: providerError(raw.data) };
     try {
       const data = commandCodeToOpenAI(raw.data, providerModel);
-      return validChatResponse(data, false, providerModel) ? { status: 'on' as const } : { status: 'off' as const, error: 'provider returned no matching chat content' };
+      return validChatResponse(data) ? { status: 'on' as const } : { status: 'off' as const, error: 'provider returned no chat content' };
     } catch (err: any) {
       return { status: 'off' as const, error: err.message || providerError(raw.data) };
     }
@@ -53,7 +47,7 @@ export async function testProviderModel(provider: any, providerModel: string) {
     const raw = await axios.post(target.url, body, { timeout: config.defaultTimeoutMs, headers, validateStatus: () => true });
     if (raw.status === 404) { lastError = `HTTP 404 at ${target.url}`; continue; }
     if (raw.status >= 400) return { status: 'off' as const, error: providerError(raw.data) };
-    return validChatResponse(raw.data, target.native, providerModel) ? { status: 'on' as const } : { status: 'off' as const, error: 'provider returned no matching chat completion' };
+    return validChatResponse(raw.data, target.native) ? { status: 'on' as const } : { status: 'off' as const, error: 'provider returned no valid chat completion' };
   }
 
   return { status: 'off' as const, error: lastError };
