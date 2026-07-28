@@ -36,9 +36,32 @@ export async function fetchCustomProviderModels(provider: any) {
       if (res.status === 404) { lastError = `HTTP 404 at ${url}`; continue; }
       if (res.status >= 400) return { status: 'error', models: [] as string[], error: `${provider.name || provider.id} models request failed: HTTP ${res.status}` };
 
-      const native = url.endsWith('/api/tags');
-      const data = native || Array.isArray(res.data?.models) ? res.data?.models : Array.isArray(res.data?.data) ? res.data.data : [];
-      const ids = (Array.isArray(data) ? data : []).map((item: any) => String(item?.id || item?.name || '').trim()).filter(Boolean);
+      // Handle all common response formats
+      let data: any[] = [];
+      const body = res.data;
+      
+      if (Array.isArray(body)) {
+        // Plain array: [{id: "model1"}, ...] or ["model1", ...]
+        data = body;
+      } else if (Array.isArray(body?.models)) {
+        // Ollama format: { models: [...] }
+        data = body.models;
+      } else if (Array.isArray(body?.data)) {
+        // OpenAI format: { data: [...] }
+        data = body.data;
+      } else if (body?.object === 'list' && Array.isArray(body?.data)) {
+        // OpenAI list format: { object: "list", data: [...] }
+        data = body.data;
+      }
+      
+      // Extract model IDs from various formats
+      const ids = data
+        .map((item: any) => {
+          if (typeof item === 'string') return item.trim();
+          return String(item?.id || item?.name || item?.model || '').trim();
+        })
+        .filter(Boolean);
+      
       return { status: 'on', models: ids.map((id: string) => id.startsWith(`${provider.id}/`) ? id : `${provider.id}/${id}`) };
     } catch (err: any) {
       lastError = err.code || err.message || 'request failed';
