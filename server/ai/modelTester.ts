@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { config } from '../config.js';
-import { openAiCompatibleBody, nativeOllamaBody, providerChatTargets, providerHeaders } from './customProvider.js';
+import { openAiCompatibleBody, nativeOllamaBody, providerChatTargets, providerHeaders, renderBodyTemplate } from './customProvider.js';
 import { commandCodeBody, commandCodeHeaders, commandCodeToOpenAI } from './special/commandCodeGo.js';
 
 const PING_BODY = {
@@ -52,8 +52,10 @@ export async function testProviderModel(provider: any, providerModel: string) {
   }
 
   let lastError = 'no compatible endpoint';
+  const prompt = PING_BODY.messages.filter((m: any) => m.role === 'user').map((m: any) => m.content).join('\n');
   for (const target of providerChatTargets(provider)) {
-    const body = target.native ? nativeOllamaBody(PING_BODY, providerModel) : openAiCompatibleBody(PING_BODY, providerModel);
+    const templateBody = (provider as any).bodyTemplate ? renderBodyTemplate((provider as any).bodyTemplate, PING_BODY.messages, providerModel, prompt) : undefined;
+    const body = templateBody || (target.native ? nativeOllamaBody(PING_BODY, providerModel) : openAiCompatibleBody(PING_BODY, providerModel));
     const raw = await axios.post(target.url, body, { timeout: config.defaultTimeoutMs, headers, validateStatus: () => true });
     if (raw.status === 404) { lastError = `HTTP 404 at ${target.url}`; continue; }
     if (raw.status >= 400) return { status: 'off' as const, error: providerError(raw.data) };

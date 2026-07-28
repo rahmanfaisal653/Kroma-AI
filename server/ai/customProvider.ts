@@ -104,3 +104,16 @@ export function canUseProvider(provider: any, ownerType?: string) {
 export function visibleProviders(providers: any[], ownerType: 'internal' | 'partner') {
   return providers.filter(provider => canUseProvider(provider, ownerType));
 }
+
+export function renderBodyTemplate(template: string, messages: any[], model: string, prompt: string): any | undefined {
+  if (!template) return undefined;
+  try {
+    const rendered = template
+      .replace(/\{\{messages\}\}/g, JSON.stringify(messages))
+      .replace(/\{\{model\}\}/g, model.replace(/\\/g, '\\\\').replace(/"/g, '\\"'))
+      .replace(/\{\{prompt\}\}/g, prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"'));
+    return JSON.parse(rendered);
+  } catch {
+    return undefined;
+  }
+}

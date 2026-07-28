@@ -16,6 +16,7 @@ type ProviderStatus = {
   baseUrl: string;
   chatPath?: string;
   modelsPath?: string;
+  bodyTemplate?: string;
   configured?: boolean;
   enabled?: boolean;
   visibility?: Visibility[];
@@ -26,7 +27,7 @@ type ProviderStatus = {
   models?: string[];
   model_checks?: Record<string, ModelCheck>;
 };
-type Form = { id: string; originalId: string; name: string; baseUrl: string; secret: string; chatPath: string; modelsPath: string; enabled: boolean; visibility: Visibility[] };
+type Form = { id: string; originalId: string; name: string; baseUrl: string; secret: string; chatPath: string; modelsPath: string; bodyTemplate: string; enabled: boolean; visibility: Visibility[] };
 
 const visibilityLabels: Record<Visibility, string> = { internal: 'Internal', partner: 'Partner' };
 const cleanVisibility = (value?: Visibility[] | string): Visibility[] => {
@@ -67,6 +68,7 @@ export default function ProviderDetailPage() {
     secret: '',
     chatPath: provider.chatPath || '/chat/completions',
     modelsPath: provider.modelsPath || '/models',
+    bodyTemplate: provider.bodyTemplate || '',
     enabled: provider.enabled !== false,
     visibility: cleanVisibility(provider.visibility),
   });
@@ -80,6 +82,7 @@ export default function ProviderDetailPage() {
         id: form.id, name: form.name, baseUrl: form.baseUrl,
         apiKey: form.secret || undefined,
         chatPath: form.chatPath, modelsPath: form.modelsPath,
+        bodyTemplate: form.bodyTemplate,
         enabled: form.enabled, visibility: form.visibility,
       };
       if (form.id !== form.originalId) {
@@ -120,6 +123,7 @@ export default function ProviderDetailPage() {
         baseUrl: provider.baseUrl,
         chatPath: provider.chatPath || '/chat/completions',
         modelsPath: provider.modelsPath || '/models',
+        bodyTemplate: provider.bodyTemplate || '',
         enabled: next.enabled,
         visibility: next.visibility,
       });
@@ -170,6 +174,7 @@ export default function ProviderDetailPage() {
         <Meta label="Visibility">{vis.map(v => visibilityLabels[v]).join(', ')}</Meta>
         <Meta label="Models Path"><code className="font-mono">{provider.modelsPath || '/models'}</code></Meta>
         <Meta label="Chat Path"><code className="font-mono">{provider.chatPath || '/chat/completions'}</code></Meta>
+        {provider.bodyTemplate && <Meta label="Body Template"><code className="font-mono text-[10px]">{provider.bodyTemplate}</code></Meta>}
         <Meta label="Model ID"><code className="font-mono">{provider.id}/model-name</code></Meta>
         <Meta label="Total Models">{provider.models?.length || 0}</Meta>
       </div>
@@ -213,6 +218,11 @@ export default function ProviderDetailPage() {
       <div className="grid md:grid-cols-2 gap-3">
         <Input label="Models Path" value={form.modelsPath} onChange={e => setForm({ ...form, modelsPath: e.target.value })} />
         <Input label="Chat Path" value={form.chatPath} onChange={e => setForm({ ...form, chatPath: e.target.value })} />
+      </div>
+      <div className="md:col-span-2">
+        <p className="text-xs text-[var(--color-text-muted)] mb-1">Chat Body Template</p>
+        <textarea value={form.bodyTemplate} onChange={e => setForm({ ...form, bodyTemplate: e.target.value })} placeholder='{"messages": {{messages}}, "model": "{{model}}", "max_tokens": 32}' rows={3} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-mono text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+        <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Kosongkan untuk default OpenAI. Placeholder: {`{{messages}}`}, {`{{model}}`}, {`{{prompt}}`}</p>
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
         <div><p className="text-xs text-[var(--color-text-muted)] mb-1">Status</p><div className="flex gap-2"><Pill active={form.enabled} onClick={() => setForm({ ...form, enabled: true })}>Enable</Pill><Pill active={!form.enabled} onClick={() => setForm({ ...form, enabled: false })}>Disable</Pill></div></div>

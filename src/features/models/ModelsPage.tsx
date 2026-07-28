@@ -20,9 +20,9 @@ type ProviderStatus = {
   enabled?: boolean;
   status?: string;
 };
-type Form = { id: string; name: string; baseUrl: string; secret: string; chatPath: string; modelsPath: string; enabled: boolean; visibility: Visibility[] };
+type Form = { id: string; name: string; baseUrl: string; secret: string; chatPath: string; modelsPath: string; bodyTemplate: string; enabled: boolean; visibility: Visibility[] };
 
-const emptyForm: Form = { id: '', name: '', baseUrl: '', secret: '', chatPath: '/chat/completions', modelsPath: '/models', enabled: true, visibility: ['internal'] };
+const emptyForm: Form = { id: '', name: '', baseUrl: '', secret: '', chatPath: '/chat/completions', modelsPath: '/models', bodyTemplate: '', enabled: true, visibility: ['internal'] };
 const visibilityLabels: Record<Visibility, string> = { internal: 'Internal', partner: 'Partner' };
 const toggleVisibility = (current: Visibility[], value: Visibility) => {
   const next = current.includes(value) ? current.filter(item => item !== value) : [...current, value];
@@ -59,6 +59,7 @@ export default function ModelsPage() {
       id: form.id, name: form.name, baseUrl: form.baseUrl,
       apiKey: form.secret || undefined,
       chatPath: form.chatPath, modelsPath: form.modelsPath,
+      bodyTemplate: form.bodyTemplate,
       enabled: form.enabled, visibility: form.visibility,
     });
     setForm(null); await load(); toast.success('Provider saved');
@@ -86,6 +87,11 @@ export default function ModelsPage() {
       <div className="grid md:grid-cols-2 gap-3">
         <Input label="Models Path" value={form.modelsPath} onChange={e => setForm({ ...form, modelsPath: e.target.value })} placeholder="/models" />
         <Input label="Chat Path" value={form.chatPath} onChange={e => setForm({ ...form, chatPath: e.target.value })} placeholder="/chat/completions" />
+      </div>
+      <div className="md:col-span-2">
+        <p className="text-xs text-[var(--color-text-muted)] mb-1">Chat Body Template</p>
+        <textarea value={form.bodyTemplate} onChange={e => setForm({ ...form, bodyTemplate: e.target.value })} placeholder='{"messages": {{messages}}, "model": "{{model}}", "max_tokens": 32}' rows={3} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-mono text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)]" />
+        <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Kosongkan untuk default OpenAI. Placeholder: {`{{messages}}`}, {`{{model}}`}, {`{{prompt}}`}</p>
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
         <div><p className="text-xs text-[var(--color-text-muted)] mb-1">Status</p><div className="flex gap-2"><Toggle active={form.enabled} onClick={() => setForm({ ...form, enabled: true })}>Enable</Toggle><Toggle active={!form.enabled} onClick={() => setForm({ ...form, enabled: false })}>Disable</Toggle></div></div>
