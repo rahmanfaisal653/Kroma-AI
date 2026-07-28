@@ -105,13 +105,14 @@ export function visibleProviders(providers: any[], ownerType: 'internal' | 'part
   return providers.filter(provider => canUseProvider(provider, ownerType));
 }
 
-export function buildChatBody(provider: any, messages: any[], model: string): any {
+export function buildChatBody(provider: any, messages: any[], model: string, options: any = {}): any {
   if (provider.chatFormat === 'ollama') {
     return {
       prompt: messages.filter((m: any) => m.role !== 'system').map((m: any) => m.content).join('\n'),
       model,
       stream: false,
+      ...options,
     };
   }
-  return { messages, model, max_tokens: 32 };
+  return { ...options, messages, model };
 }

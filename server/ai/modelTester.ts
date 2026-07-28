@@ -5,7 +5,7 @@ import { commandCodeBody, commandCodeHeaders, commandCodeToOpenAI } from './spec
 
 const PING_BODY = {
   messages: [{ role: 'user', content: 'Reply exactly: pong' }],
-  max_tokens: 32,
+  max_tokens: 256,
 };
 
 function providerError(data: any) {
@@ -17,11 +17,11 @@ function providerError(data: any) {
 }
 
 function textOf(data: any): string {
-  // Handle all common response formats
+  // Handle all common response formats including thinking models
   const msg = data?.choices?.[0]?.message;
   return String(
-    msg?.content || msg?.text || data?.choices?.[0]?.text ||
-    data?.message?.content || data?.response || data?.output ||
+    msg?.content || msg?.reasoning_content || msg?.text || data?.choices?.[0]?.text ||
+    data?.message?.content || data?.message?.reasoning_content || data?.response || data?.output ||
     data?.result || ''
   ).trim();
 }

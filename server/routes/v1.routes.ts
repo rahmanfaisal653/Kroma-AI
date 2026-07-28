@@ -121,7 +121,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
     } else for (const target of providerChatTargets(provider)) {
       if (stream && target.native) continue;
       triedChat.push(target.url);
-      const body = buildChatBody(provider, messages, model.providerModel);
+      const body = buildChatBody(provider, messages, model.providerModel, { ...req.body, stream });
       const candidate = await axios.post(target.url, body, { timeout: config.defaultTimeoutMs, responseType: stream ? 'stream' : 'json', headers, validateStatus: () => true });
       upstream = candidate;
       nativeOllama = target.native;
