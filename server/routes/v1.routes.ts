@@ -165,6 +165,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
       if (stream && target.native) continue;
       triedChat.push(target.url);
       const body = buildChatBody(provider, messages, model.providerModel, { ...req.body, stream });
+      console.log('[DEBUG] Custom provider request:', JSON.stringify({ url: target.url, providerId: provider.id, chatFormat: provider.chatFormat, bodyKeys: Object.keys(body), hasTools: !!body.tools, hasToolChoice: !!body.tool_choice, messageCount: body.messages?.length, stream }));
       const candidate = await axios.post(target.url, body, { timeout: config.defaultTimeoutMs, responseType: stream ? 'stream' : 'json', headers, validateStatus: () => true });
       upstream = candidate;
       nativeOllama = target.native;
