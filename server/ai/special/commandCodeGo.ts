@@ -197,7 +197,6 @@ export function commandCodeToOpenAI(raw: string, model: string) {
     if (event.type === 'error') throw new Error(typeof event.error === 'string' ? event.error : JSON.stringify(event.error || event.message || 'Command Code error'));
   }
   const message: any = { role: 'assistant', content };
-  if (reasoning) message.reasoning_content = reasoning;
   const response: any = { id: `chatcmpl-${Date.now()}`, object: 'chat.completion', created: Math.floor(Date.now() / 1000), model, choices: [{ index: 0, message, finish_reason: 'stop' }] };
   if (usage) response.usage = { prompt_tokens: Number(usage.inputTokens || usage.prompt_tokens || 0), completion_tokens: Number(usage.outputTokens || usage.completion_tokens || 0), total_tokens: Number(usage.totalTokens || usage.total_tokens || 0) };
   return response;
