@@ -22,14 +22,14 @@ export const COMMANDCODE_GO_MODELS = [
 ];
 
 export function commandCodeHeaders(apiHeaders: Record<string, string>) {
-  return {
-    ...apiHeaders,
-    Accept: 'text/event-stream',
-    'User-Agent': 'commandcode/0.25.7',
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'text/event-stream',
     'x-session-id': crypto.randomUUID(),
-    'x-command-code-version': '0.25.7',
-    'x-cli-environment': 'cli',
   };
+  // Pass through Authorization from providerHeaders
+  if (apiHeaders.Authorization) headers.Authorization = apiHeaders.Authorization;
+  return headers;
 }
 
 function flattenText(content: any): string {
