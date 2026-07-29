@@ -23,10 +23,9 @@ export async function fetchProviderModels(provider: any) {
       error: configured ? undefined : 'Command Code Go API key is not configured',
     };
   }
-  if (!provider.apiKey && !provider.baseUrl.startsWith('http://')) {
-    // ponytail: skip cloud providers without keys; local http providers may be keyless.
-    return { status: 'not_configured', models: [] as string[], error: `${provider.name} API key is not configured` };
-  }
+  // Allow keyless providers (both http and https); upstream handles its own auth.
+  // Previously we blocked keyless https providers — removed so public HTTPS APIs
+  // and Cloudflare Tunnel / reverse-proxy setups work without a dummy key.
   return fetchCustomProviderModels(provider);
 }
 

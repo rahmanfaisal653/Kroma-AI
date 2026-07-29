@@ -154,6 +154,8 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
           res.end();
         });
         raw.data.on('error', async (err: any) => {
+          // Write SSE error so the client knows the stream aborted, not just truncated.
+          res.write(`data: ${JSON.stringify({ error: { message: err.message || 'stream error', code: 'STREAM_ERROR' } })}\n\n`);
           await logUsage({ userId: 0, apiKeyId: req.gatewayKey!.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens: estimatedInput, totalTokens: estimatedInput, latencyMs: Date.now() - started, statusCode: 502, errorMessage: err.message, ipAddress: req.ip, userAgent: req.get('user-agent') });
           res.end();
         });
@@ -173,6 +175,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
     }
 
     if (stream) {
+      if (!upstream) return apiError(res, 502, 'PROVIDER_ERROR', 'no upstream target resolved', { provider: provider.id });
       if (upstream.status >= 400) return apiError(res, upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502, 'PROVIDER_ERROR', 'provider stream failed', { provider: provider.id, upstreamStatus: upstream.status, model: model.providerModel });
       res.status(200);
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -187,6 +190,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
         res.end();
       });
       upstream.data.on('error', async (err: any) => {
+        res.write(`data: ${JSON.stringify({ error: { message: err.message || 'stream error', code: 'STREAM_ERROR' } })}\n\n`);
         await logUsage({ userId: 0, apiKeyId: req.gatewayKey!.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens: estimatedInput, totalTokens: estimatedInput, latencyMs: Date.now() - started, statusCode: 502, errorMessage: err.message, ipAddress: req.ip, userAgent: req.get('user-agent') });
         res.end();
       });
