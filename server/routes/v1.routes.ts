@@ -114,9 +114,11 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
     if (provider.id === 'commandcode-go') {
       const url = provider.baseUrl;
       const body = commandCodeBody(model.providerModel, req.body, messages);
+      const ccHeaders = commandCodeHeaders(headers);
+      console.log('[DEBUG] CommandCode Go request:', JSON.stringify({ url, headers: ccHeaders, bodyKeys: Object.keys(body), paramsKeys: Object.keys(body.params || {}), hasTools: !!body.params?.tools, stream }));
       triedChat.push(url);
       if (stream) {
-        const raw = await axios.post(url, body, { timeout: config.defaultTimeoutMs, responseType: 'stream', headers: commandCodeHeaders(headers), validateStatus: () => true });
+        const raw = await axios.post(url, body, { timeout: config.defaultTimeoutMs, responseType: 'stream', headers: ccHeaders, validateStatus: () => true });
         if (raw.status >= 400) return apiError(res, raw.status >= 400 && raw.status < 500 ? raw.status : 502, 'PROVIDER_ERROR', 'provider stream failed', { provider: provider.id, upstreamStatus: raw.status, model: model.providerModel });
         res.status(200);
         res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
