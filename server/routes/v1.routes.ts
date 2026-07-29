@@ -136,10 +136,7 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
               output += event.text || event.delta || '';
               res.write(sse);
             }
-            if (event.type === 'reasoning-delta' && event.text) {
-              const sse = `data: ${JSON.stringify({ id: chatId, object: 'chat.completion.chunk', choices: [{ index: 0, delta: { reasoning_content: event.text }, finish_reason: null }] })}\n\n`;
-              res.write(sse);
-            }
+            // reasoning-delta is intentionally dropped — prevents COT leak to client
             if (event.type === 'error') {
               const sse = `data: ${JSON.stringify({ error: { message: typeof event.error === 'string' ? event.error : JSON.stringify(event.error || event.message || 'Command Code error') } })}\n\n`;
               res.write(sse);
