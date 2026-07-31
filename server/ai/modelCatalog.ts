@@ -51,6 +51,9 @@ export async function listGatewayModels(ownerType: 'internal' | 'partner'): Prom
   const providers = visibleProviders(await listProviderConfigs(), ownerType);
   const rows = await Promise.all(providers.map(async provider => {
     const result = await fetchProviderModels(provider);
+    // Gateway only exposes models from configured + working providers.
+    // Dashboard (provider-status) still shows everything for admin debugging.
+    if (result.status !== 'on') return [] as ModelEntry[];
     const fresh = await pruneProviderModelChecks(provider.id, result.models);
     const checks = fresh?.model_checks || provider.model_checks || {};
     return activeCheckedModels(result.models, checks).map(id => {
