@@ -9,10 +9,10 @@ export function generateGatewayKey(): string {
 }
 
 export function hashGatewayKey(key: string): string {
-  return createHmac('sha256', config.jwtSecret).update(key).digest('hex');
+  return createHmac('sha256', config.hmacSecret).update(key).digest('hex');
 }
 
-function secretKey() { return createHash('sha256').update(config.jwtSecret).digest(); }
+function secretKey() { return createHash('sha256').update(config.aesSecret).digest(); }
 function encryptValue(value: string) {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', secretKey(), iv);

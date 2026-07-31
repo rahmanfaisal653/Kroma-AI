@@ -31,12 +31,19 @@ export const config = {
 
   // Admin
   adminKey: process.env.ADMIN_KEY || '',
+  maxBodyJson: String(process.env.MAX_BODY_JSON || '10mb').trim(),
 
   // JWT
   jwtSecret: process.env.JWT_SECRET || 'kroma-default-secret-change-me',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'kroma-refresh-secret-change-me',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
+
+  // Derived keys for non-JWT operations (API key hashing, gateway key encryption).
+  // Each SHOULD be set independently in production to avoid single-secret collapse.
+  // Falls back to jwtSecret only for development convenience.
+  hmacSecret: process.env.HMAC_SECRET || process.env.JWT_SECRET || 'kroma-hmac-secret-change-me',
+  aesSecret: process.env.AES_SECRET || process.env.JWT_SECRET || 'kroma-aes-secret-change-me',
 
   // Provider config for internal /v1 gateway
   openaiApiKey: String(process.env.OPENAI_API_KEY || '').trim(),
@@ -49,6 +56,7 @@ export const config = {
   apiRateLimitMax: Number(process.env.API_RATE_LIMIT_MAX) > 0 ? Number(process.env.API_RATE_LIMIT_MAX) : 200,
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) > 0 ? Number(process.env.AUTH_RATE_LIMIT_MAX) : 10,
   gatewayRateLimitMax: Number(process.env.GATEWAY_RATE_LIMIT_MAX) > 0 ? Number(process.env.GATEWAY_RATE_LIMIT_MAX) : 30,
+  streamIdleTimeoutMs: Number(process.env.STREAM_IDLE_TIMEOUT_MS) > 0 ? Number(process.env.STREAM_IDLE_TIMEOUT_MS) : 30000,
 } as const;
 
 export type Config = typeof config;

@@ -42,7 +42,7 @@ if (config.nodeEnv === 'production' && !corsOrigins) {
 } else {
   app.use(cors(corsOrigins ? { origin: corsOrigins, credentials: true } : undefined));
 }
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: config.maxBodyJson }));
 app.use(apiLimiter);
 
 // --- Health Check (PUBLIC — minimal info only) ---

@@ -1,5 +1,20 @@
 import axios from 'axios';
 
+const ALLOWED_CHAT_OPTIONS: Set<string> = new Set([
+  'max_tokens', 'max_output_tokens', 'temperature', 'top_p', 'top_k',
+  'tools', 'tool_choice', 'stop', 'frequency_penalty', 'presence_penalty',
+  'seed', 'user', 'response_format', 'stream',
+]);
+
+export function sanitizeChatOptions(body: any): Record<string, unknown> {
+  if (!body || typeof body !== 'object') return {};
+  const out: Record<string, unknown> = {};
+  for (const key of ALLOWED_CHAT_OPTIONS) {
+    if (key in body) out[key] = body[key];
+  }
+  return out;
+}
+
 export function providerHeaders(provider: any, json = false) {
   const headers: Record<string, string> = json ? { 'Content-Type': 'application/json' } : {};
   if (provider.apiKey) {

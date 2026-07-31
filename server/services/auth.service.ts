@@ -22,7 +22,7 @@ export function isLikelyUserApiKey(value: string | null | undefined): boolean {
 }
 
 export function hashApiKey(apiKey: string): string {
-  return crypto.createHmac('sha256', config.jwtSecret).update(apiKey).digest('hex');
+  return crypto.createHmac('sha256', config.hmacSecret).update(apiKey).digest('hex');
 }
 
 // --- Password Hashing (bcrypt) ---

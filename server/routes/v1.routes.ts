@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import axios from 'axios';
-import { providerChatTargets, providerHeaders, nativeOllamaToOpenAI, canUseProvider, buildChatBody } from '../ai/customProvider.js';
+import { providerChatTargets, providerHeaders, nativeOllamaToOpenAI, canUseProvider, buildChatBody, sanitizeChatOptions } from '../ai/customProvider.js';
 import { commandCodeBody, commandCodeHeaders, commandCodeToOpenAI } from '../ai/special/commandCodeGo.js';
 import { requireGatewayKey } from '../middleware/internalApiKey.middleware.js';
 import { touchGatewayKey } from '../services/internalApiKey.service.js';
@@ -22,6 +22,18 @@ function apiError(res: any, status: number, code: string, message: string, detai
       timestamp: new Date().toISOString(),
     },
   });
+}
+
+function withIdleTimeout(stream: any, timeoutMs: number, onIdle: () => void) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  function reset() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(onIdle, timeoutMs);
+  }
+  reset();
+  stream.on('data', reset);
+  stream.once('end', () => { if (timer) clearTimeout(timer); });
+  stream.once('error', () => { if (timer) clearTimeout(timer); });
 }
 
 function estimateTokens(value: unknown): number {
@@ -113,7 +125,8 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
 
     if (provider.id === 'commandcode-go') {
       const url = provider.baseUrl;
-      const body = commandCodeBody(model.providerModel, req.body, messages);
+      const options = sanitizeChatOptions(req.body);
+      const body = commandCodeBody(model.providerModel, { ...options }, messages);
       const ccHeaders = commandCodeHeaders(headers);
       console.log('[DEBUG] CommandCode Go request:', JSON.stringify({ url, headers: ccHeaders, bodyKeys: Object.keys(body), paramsKeys: Object.keys(body.params || {}), hasTools: !!body.params?.tools, stream }));
       triedChat.push(url);
@@ -126,6 +139,8 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
         res.setHeader('Connection', 'keep-alive');
         let output = '';
         const chatId = `chatcmpl-${Date.now()}`;
+        const idleMsg = `data: ${JSON.stringify({ error: { message: 'stream idle timeout', code: 'STREAM_IDLE_TIMEOUT' } })}\n\n`;
+        withIdleTimeout(raw.data, config.streamIdleTimeoutMs, () => { res.write(idleMsg); raw.data.destroy(new Error('idle timeout')); });
         raw.data.on('data', (chunk: Buffer) => {
           const lines = chunk.toString('utf8').split(/\r?\n/).filter(Boolean);
           for (const line of lines) {
@@ -163,7 +178,8 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
     } else for (const target of providerChatTargets(provider)) {
       if (stream && target.native) continue;
       triedChat.push(target.url);
-      const body = buildChatBody(provider, messages, model.providerModel, { ...req.body, stream });
+      const opts = sanitizeChatOptions(req.body);
+      const body = buildChatBody(provider, messages, model.providerModel, { ...opts, stream });
       console.log('[DEBUG] Custom provider request:', JSON.stringify({ url: target.url, providerId: provider.id, chatFormat: provider.chatFormat, bodyKeys: Object.keys(body), hasTools: !!body.tools, hasToolChoice: !!body.tool_choice, messageCount: body.messages?.length, stream }));
       const candidate = await axios.post(target.url, body, { timeout: config.defaultTimeoutMs, responseType: stream ? 'stream' : 'json', headers, validateStatus: () => true });
       upstream = candidate;
@@ -180,6 +196,8 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
       res.setHeader('Connection', 'keep-alive');
 
       let output = '';
+      const cidleMsg = `data: ${JSON.stringify({ error: { message: 'stream idle timeout', code: 'STREAM_IDLE_TIMEOUT' } })}\n\n`;
+      withIdleTimeout(upstream.data, config.streamIdleTimeoutMs, () => { res.write(cidleMsg); upstream.data.destroy(new Error('idle timeout')); });
       upstream.data.on('data', (chunk: Buffer) => { const raw = chunk.toString('utf8'); output += extractSseContent(raw); res.write(raw); });
       upstream.data.on('end', async () => {
         const outputTokens = estimateTokens(output);
