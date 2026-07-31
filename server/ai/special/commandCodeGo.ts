@@ -27,6 +27,7 @@ export function commandCodeHeaders(apiHeaders: Record<string, string>) {
     'Accept': 'text/event-stream',
     'x-session-id': crypto.randomUUID(),
     'x-command-code-version': '0.25.7',
+    'x-cli-environment': 'cli',
   };
   // Pass through Authorization from providerHeaders
   if (apiHeaders.Authorization) headers.Authorization = apiHeaders.Authorization;
