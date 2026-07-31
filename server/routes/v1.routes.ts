@@ -198,7 +198,28 @@ router.post('/chat/completions', requireGatewayKey, async (req, res) => {
       let output = '';
       const cidleMsg = `data: ${JSON.stringify({ error: { message: 'stream idle timeout', code: 'STREAM_IDLE_TIMEOUT' } })}\n\n`;
       withIdleTimeout(upstream.data, config.streamIdleTimeoutMs, () => { res.write(cidleMsg); upstream.data.destroy(new Error('idle timeout')); });
-      upstream.data.on('data', (chunk: Buffer) => { const raw = chunk.toString('utf8'); output += extractSseContent(raw); res.write(raw); });
+      upstream.data.on('data', (chunk: Buffer) => {
+        const text = chunk.toString('utf8');
+        // Filter reasoning_content from custom provider SSE (same as CommandCode Go path)
+        const lines = text.split('\n');
+        const filtered = lines.filter(line => {
+          if (!line.startsWith('data: ') && !line.startsWith('data:')) return true;
+          const dataPart = line.startsWith('data: ') ? line.slice(6).trim() : line.slice(5).trim();
+          if (!dataPart || dataPart === '[DONE]') return true;
+          try {
+            const parsed = JSON.parse(dataPart);
+            // Drop chunks containing ONLY reasoning_content (COT leak prevention)
+            const delta = parsed?.choices?.[0]?.delta;
+            if (delta && 'reasoning_content' in delta && !('content' in delta) && !(delta.content)) return false;
+          } catch { return true; }
+          return true;
+        });
+        if (filtered.length > 0) {
+          const clean = filtered.join('\n') + '\n';
+          output += extractSseContent(clean);
+          res.write(clean);
+        }
+      });
       upstream.data.on('end', async () => {
         const outputTokens = estimateTokens(output);
         await Promise.allSettled([touchGatewayKey(req.gatewayKey!.id), logUsage({ userId: 0, apiKeyId: req.gatewayKey!.id, apiId: model.id, endpoint: '/v1/chat/completions', modelSlug: model.id, inputTokens: estimatedInput, outputTokens, totalTokens: estimatedInput + outputTokens, latencyMs: Date.now() - started, statusCode: 200, ipAddress: req.ip, userAgent: req.get('user-agent') })]);
